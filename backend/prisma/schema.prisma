@@ -1,0 +1,516 @@
+// Veylo — Sistema de Gestión para Barbería
+// Schema de base de datos
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider  = "postgresql"
+  url       = env("DATABASE_URL")
+}
+
+// ─── CORE ─────────────────────────────────────────────────────────────
+
+model Negocio {
+  id            String         @id @default(cuid())
+  nombre        String
+  logoUrl       String?
+  direccion     String?
+  telefono      String?
+  email         String?
+  timezone      String         @default("America/Argentina/Buenos_Aires")
+  configuracion String?        // JSON stored as string for SQLite compatibility
+  createdAt     DateTime       @default(now())
+
+  usuarios      Usuario[]
+  clientes      Cliente[]
+  empleados     Empleado[]
+  servicios     Servicio[]
+  productos     Producto[]
+  gastos        Gasto[]
+  gastoCategorias GastoCategoria[]
+  cajas         Caja[]
+  ventas        Venta[]
+  movimientos   MovimientoCaja[]
+  bloqueos      BloqueHorario[]
+  turnos        Turno[]
+  membresias    Membresia[]
+  cupones       Cupon[]
+  proveedores   Proveedor[]
+  auditLogs     AuditLog[]
+  movimientosPuntos MovimientoPuntos[]
+}
+
+model Usuario {
+  id         String    @id @default(cuid())
+  negocioId  String
+  nombre     String
+  email      String    @unique
+  password   String
+  rol        String    @default("recepcionista") // admin, recepcionista, barbero, cliente
+  activo     Boolean   @default(true)
+  lastLogin  DateTime?
+  createdAt  DateTime  @default(now())
+
+  negocio    Negocio @relation(fields: [negocioId], references: [id], onDelete: Cascade)
+  empleado   Empleado?
+
+  @@index([negocioId, email])
+  @@index([email])
+}
+
+model Empleado {
+  id                  String   @id @default(cuid())
+  usuarioId           String?  @unique
+  negocioId           String
+  nombre              String
+  apellido            String?
+  telefono            String?
+  fotoUrl             String?
+  comisionPorcentaje  Decimal  @default(0)
+  activo              Boolean  @default(true)
+  fechaIngreso        DateTime
+  especialidades      String   // JSON array stored as string for SQLite compatibility
+  createdAt           DateTime @default(now())
+
+  usuario             Usuario?             @relation(fields: [usuarioId], references: [id], onDelete: SetNull)
+  negocio             Negocio              @relation(fields: [negocioId], references: [id], onDelete: Cascade)
+  horarios            HorarioEmpleado[]
+  serviciosEmpleado   ServicioEmpleado[]
+  turnos              Turno[]
+  bloqueos            BloqueHorario[]
+
+  @@index([negocioId])
+  @@index([activo])
+}
+
+model HorarioEmpleado {
+  id          String   @id @default(cuid())
+  empleadoId  String
+  diaSemana  Int      // 0=Lunes, 6=Domingo
+  horaInicio String   // HH:MM
+  horaFin    String   // HH:MM
+  activo      Boolean  @default(true)
+
+  empleado    Empleado @relation(fields: [empleadoId], references: [id], onDelete: Cascade)
+
+  @@index([empleadoId])
+  @@unique([empleadoId, diaSemana])
+}
+
+model Cliente {
+  id                  String    @id @default(cuid())
+  negocioId           String
+  nombre              String
+  apellido            String?
+  telefono            String    @unique
+  email               String?
+  fechaNacimiento     DateTime?
+  dni                 String?   @unique
+  fotoUrl             String?
+  preferencias         String?
+  observaciones        String?
+  segmento            String    @default("nuevo") // nuevo, frecuente, inactivo
+  puntosAcumulados    Int       @default(0)
+  createdAt           DateTime  @default(now())
+  updatedAt           DateTime  @updatedAt
+
+  negocio             Negocio @relation(fields: [negocioId], references: [id], onDelete: Cascade)
+  turnos              Turno[]
+  ventas              Venta[]
+  movimientosPuntos   MovimientoPuntos[]
+  clienteMembresia    ClienteMembresia[]
+
+  @@index([negocioId])
+  @@index([telefono])
+  @@index([segmento])
+}
+
+model Servicio {
+  id          String   @id @default(cuid())
+  negocioId   String
+  nombre      String
+  descripcion String?
+  precio      Decimal
+  duracionMin Int
+  colorAgenda String   @default("#3B82F6")
+  activo      Boolean  @default(true)
+  categoria   String?
+
+  negocio    Negocio            @relation(fields: [negocioId], references: [id], onDelete: Cascade)
+  serviciosEmpleado ServicioEmpleado[]
+  turnoServicios     TurnoServicio[]
+  insumosServicio    InsumoServicio[]
+
+  @@index([negocioId])
+  @@index([activo])
+}
+
+model ServicioEmpleado {
+  empleadoId  String
+  servicioId  String
+
+  empleado    Empleado @relation(fields: [empleadoId], references: [id], onDelete: Cascade)
+  servicio    Servicio @relation(fields: [servicioId], references: [id], onDelete: Cascade)
+
+  @@id([empleadoId, servicioId])
+}
+
+// ─── TURNOS ─────────────────────────────────────────────────────────────
+
+model Turno {
+  id          String    @id @default(cuid())
+  negocioId   String
+  clienteId   String
+  empleadoId  String
+  fechaInicio DateTime
+  fechaFin    DateTime
+  estado      String    @default("pendiente") // pendiente, confirmado, en_curso, finalizado, cancelado, ausente
+  origen      String    @default("presencial") // web, presencial, phone
+  notas       String?
+  createdBy   String?
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  negocio    Negocio      @relation(fields: [negocioId], references: [id], onDelete: Cascade)
+  cliente    Cliente     @relation(fields: [clienteId], references: [id], onDelete: Cascade)
+  empleado   Empleado    @relation(fields: [empleadoId], references: [id], onDelete: Cascade)
+  servicios  TurnoServicio[]
+  ventas     TurnoVenta[]
+
+  @@index([negocioId])
+  @@index([empleadoId, fechaInicio])
+  @@index([clienteId])
+  @@index([estado])
+  @@index([fechaInicio])
+}
+
+model TurnoServicio {
+  id              String  @id @default(cuid())
+  turnoId         String
+  servicioId      String
+  precioAplicado Decimal
+  duracionAplicada Int
+
+  turno    Turno   @relation(fields: [turnoId], references: [id], onDelete: Cascade)
+  servicio Servicio @relation(fields: [servicioId], references: [id], onDelete: Cascade)
+
+  @@index([turnoId])
+  @@index([servicioId])
+}
+
+model BloqueHorario {
+  id          String   @id @default(cuid())
+  negocioId   String
+  empleadoId  String
+  fechaInicio DateTime
+  fechaFin    DateTime
+  motivo      String?
+  tipo        String   // descanso, feriado, ausencia
+
+  empleado Empleado @relation(fields: [empleadoId], references: [id], onDelete: Cascade)
+  negocio Negocio   @relation(fields: [negocioId], references: [id], onDelete: Cascade)
+
+  @@index([empleadoId])
+  @@index([fechaInicio])
+}
+
+// ─── CAJA Y VENTAS ─────────────────────────────────────────────────────────
+
+model Caja {
+  id                    String    @id @default(cuid())
+  negocioId            String
+  fecha                DateTime
+  usuarioAperturaId    String?
+  montoInicial          Decimal  @default(0)
+  estado               String    @default("abierta") // abierta, cerrada
+  montoContadoCierre  Decimal?
+  montoSistemaCierre   Decimal?
+  diferencia           Decimal?
+  observacionesCierre  String?
+  abiertaAt            DateTime  @default(now())
+  cerradaAt            DateTime?
+
+  negocio   Negocio         @relation(fields: [negocioId], references: [id], onDelete: Cascade)
+  ventas    Venta[]
+  movimientos MovimientoCaja[]
+
+  @@index([negocioId, fecha])
+  @@index([estado])
+}
+
+model Venta {
+  id          String   @id @default(cuid())
+  cajaId      String
+  negocioId   String
+  clienteId   String?
+  turnoId     String?
+  tipo        String   // servicio, producto, mixta
+  subtotal    Decimal
+  descuento   Decimal  @default(0)
+  total       Decimal
+  createdBy   String?
+  createdAt   DateTime @default(now())
+
+  caja    Caja              @relation(fields: [cajaId], references: [id], onDelete: Cascade)
+  negocio Negocio           @relation(fields: [negocioId], references: [id], onDelete: Cascade)
+  cliente Cliente?          @relation(fields: [clienteId], references: [id], onDelete: SetNull)
+  items   VentaItem[]
+  pagos   PagoVenta[]
+  turnos  TurnoVenta[]
+
+  @@index([negocioId])
+  @@index([cajaId])
+  @@index([clienteId])
+}
+
+model VentaItem {
+  id            String  @id @default(cuid())
+  ventaId       String
+  tipo          String  // servicio, producto
+  referenciaId  String
+  descripcion   String
+  cantidad      Decimal
+  precioUnitario Decimal
+  subtotal      Decimal
+
+  venta Venta @relation(fields: [ventaId], references: [id], onDelete: Cascade)
+
+  @@index([ventaId])
+}
+
+model PagoVenta {
+  id               String  @id @default(cuid())
+  ventaId          String
+  medioPago        String  // efectivo, tarjeta_debito, tarjeta_credito, transferencia, qr, otro
+  monto            Decimal
+  referenciaExterna String?
+
+  venta Venta @relation(fields: [ventaId], references: [id], onDelete: Cascade)
+
+  @@index([ventaId])
+}
+
+model TurnoVenta {
+  turnoId String
+  ventaId String
+
+  turno Turno @relation(fields: [turnoId], references: [id], onDelete: Cascade)
+  venta Venta @relation(fields: [ventaId], references: [id], onDelete: Cascade)
+
+  @@id([turnoId, ventaId])
+  @@map("turno_venta")
+}
+
+model MovimientoCaja {
+  id          String   @id @default(cuid())
+  cajaId      String
+  negocioId   String
+  tipo        String   // ingreso, egreso
+  concepto    String
+  monto       Decimal
+  medioPago   String?
+  createdBy   String?
+  createdAt   DateTime @default(now())
+
+  caja    Caja    @relation(fields: [cajaId], references: [id], onDelete: Cascade)
+  negocio Negocio @relation(fields: [negocioId], references: [id], onDelete: Cascade)
+
+  @@index([cajaId])
+  @@index([negocioId])
+}
+
+// ─── STOCK ──────────────────────────────────────────────────────────────
+
+model Producto {
+  id          String   @id @default(cuid())
+  negocioId   String
+  proveedorId String?
+  nombre      String
+  descripcion String?
+  tipo        String   // venta, insumo
+  precioVenta Decimal?
+  costoCompra Decimal
+  stockActual Decimal  @default(0)
+  stockMinimo Decimal  @default(0)
+  unidad      String   @default("unidad")
+  activo      Boolean  @default(true)
+
+  negocio    Negocio           @relation(fields: [negocioId], references: [id], onDelete: Cascade)
+  proveedor  Proveedor?       @relation(fields: [proveedorId], references: [id], onDelete: SetNull)
+  movimientos MovimientoStock[]
+  insumos    InsumoServicio[]
+
+  @@index([negocioId])
+  @@index([activo])
+  @@index([tipo])
+}
+
+model Proveedor {
+  id        String   @id @default(cuid())
+  negocioId String
+  nombre    String
+  contacto  String?
+  telefono  String?
+  email     String?
+  notas     String?
+
+  negocio  Negocio   @relation(fields: [negocioId], references: [id], onDelete: Cascade)
+  productos Producto[]
+
+  @@index([negocioId])
+}
+
+model MovimientoStock {
+  id             String   @id @default(cuid())
+  productoId     String
+  tipo           String   // entrada, salida, ajuste
+  cantidad       Decimal
+  stockAnterior  Decimal?
+  stockNuevo     Decimal?
+  motivo         String?
+  referenciaId   String?
+  createdBy      String?
+  createdAt      DateTime @default(now())
+
+  producto Producto @relation(fields: [productoId], references: [id], onDelete: Cascade)
+
+  @@index([productoId])
+}
+
+model InsumoServicio {
+  servicioId    String
+  productoId    String
+  cantidadUsar Decimal
+
+  servicio Servicio @relation(fields: [servicioId], references: [id], onDelete: Cascade)
+  producto Producto @relation(fields: [productoId], references: [id], onDelete: Cascade)
+
+  @@id([servicioId, productoId])
+}
+
+// ─── FIDELIZACIÓN ─────────────────────────────────────────────────────────
+
+model Membresia {
+  id          String   @id @default(cuid())
+  negocioId   String
+  nombre      String
+  descripcion String?
+  precioMensual Decimal
+  beneficios  String?   // JSON stored as string for SQLite compatibility
+  activa      Boolean  @default(true)
+
+  negocio  Negocio            @relation(fields: [negocioId], references: [id], onDelete: Cascade)
+  clientes ClienteMembresia[]
+
+  @@index([negocioId])
+  @@index([activa])
+}
+
+model ClienteMembresia {
+  id          String   @id @default(cuid())
+  clienteId   String
+  membresiaId String
+  fechaInicio DateTime
+  fechaFin    DateTime?
+  activa      Boolean  @default(true)
+
+  cliente   Cliente    @relation(fields: [clienteId], references: [id], onDelete: Cascade)
+  membresia Membresia @relation(fields: [membresiaId], references: [id], onDelete: Cascade)
+
+  @@unique([clienteId])
+  @@index([membresiaId])
+}
+
+model MovimientoPuntos {
+  id            String   @id @default(cuid())
+  clienteId     String
+  negocioId     String
+  tipo          String   // acumula, canje
+  puntos        Int
+  saldoPost     Int
+  concepto      String?
+  referenciaId  String?
+  createdAt     DateTime @default(now())
+
+  cliente Cliente @relation(fields: [clienteId], references: [id], onDelete: Cascade)
+  negocio Negocio @relation(fields: [negocioId], references: [id], onDelete: Cascade)
+
+  @@index([clienteId])
+  @@index([negocioId])
+}
+
+model Cupon {
+  id            String   @id @default(cuid())
+  negocioId     String
+  codigo        String   @unique
+  descripcion   String?
+  tipoDescuento String   // porcentaje, monto_fijo
+  valor         Decimal
+  usosMax       Int?
+  usosActuales  Int      @default(0)
+  fechaDesde    DateTime?
+  fechaHasta    DateTime?
+  activo        Boolean  @default(true)
+
+  negocio Negocio @relation(fields: [negocioId], references: [id], onDelete: Cascade)
+
+  @@index([negocioId])
+  @@index([codigo])
+  @@index([activo])
+}
+
+// ─── CONTABILIDAD ─────────────────────────────────────────────────────────
+
+model GastoCategoria {
+  id        String   @id @default(cuid())
+  negocioId String
+  nombre    String
+  tipo      String   // fijo, variable
+
+  negocio Negocio  @relation(fields: [negocioId], references: [id], onDelete: Cascade)
+  gastos  Gasto[]
+
+  @@index([negocioId])
+}
+
+model Gasto {
+  id          String   @id @default(cuid())
+  negocioId   String
+  categoriaId String?
+  descripcion String
+  monto       Decimal
+  fecha       DateTime
+  comprobante  String?
+  createdBy   String?
+  createdAt   DateTime @default(now())
+
+  negocio   Negocio         @relation(fields: [negocioId], references: [id], onDelete: Cascade)
+  categoria GastoCategoria? @relation(fields: [categoriaId], references: [id], onDelete: SetNull)
+
+  @@index([negocioId])
+  @@index([fecha])
+}
+
+// ─── AUDITORÍA ─────────────────────────────────────────────────────────────
+
+model AuditLog {
+  id             String   @id @default(cuid())
+  negocioId      String
+  usuarioId      String?
+  accion         String
+  entidad        String
+  entidadId      String?
+  datosAnteriores String?   // JSON stored as string for SQLite compatibility
+  datosNuevos    String?   // JSON stored as string for SQLite compatibility
+  ip             String?
+  createdAt      DateTime @default(now())
+
+  negocio Negocio @relation(fields: [negocioId], references: [id], onDelete: Cascade)
+
+  @@index([negocioId])
+  @@index([usuarioId])
+  @@index([entidad, entidadId])
+  @@index([createdAt])
+}
