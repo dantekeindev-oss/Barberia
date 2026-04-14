@@ -88,11 +88,10 @@ export default function TurnosPage() {
         setLoading(true);
         const [turnosData, empleadosData, serviciosData] = await Promise.all([
           getTurnos(token, {
-            negocioId: user.negocio.id,
             fechaInicio: fecha.toISOString().split('T')[0],
           }),
-          getEmpleados(token, { negocioId: user.negocio.id }),
-          getServicios(token, { negocioId: user.negocio.id }),
+          getEmpleados(token),
+          getServicios(token),
         ]);
         setTurnos(turnosData);
         setEmpleados(empleadosData);
@@ -123,7 +122,7 @@ export default function TurnosPage() {
 
   function getTurno(hora: string, empleadoId: string) {
     const turnoHora = turnos.find(t => {
-      const turnoFecha = new Date(t.fechaHora);
+      const turnoFecha = new Date(t.fechaInicio);
       const horaTurno = turnoFecha.toLocaleTimeString("es-AR", {
         hour: "2-digit",
         minute: "2-digit",
@@ -316,7 +315,7 @@ export default function TurnosPage() {
                               {turno.cliente?.nombre || "Cliente"}
                             </p>
                             <p className="text-[10px] opacity-75 truncate">
-                              {turno.servicio?.nombre || "Servicio"}
+                              {turno.servicios?.[0]?.servicio?.nombre || "Servicio"}
                             </p>
                           </div>
                         ) : (
@@ -355,7 +354,6 @@ export default function TurnosPage() {
           // Refresh turnos
           if (token && user?.negocio?.id) {
             getTurnos(token, {
-              negocioId: user.negocio.id,
               fechaInicio: fecha.toISOString().split('T')[0],
             }).then(setTurnos);
           }

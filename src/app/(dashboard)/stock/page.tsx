@@ -21,14 +21,14 @@ import { Separator } from "@/components/ui/separator";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useAuth } from "@/contexts/AuthContext";
 import { getProductos, getMovimientosStock } from "@/lib/api";
-import type { Producto, MovimientoStock } from "@/lib/api";
+import type { Producto } from "@/lib/api";
 
 export default function StockPage() {
   const { user, token } = useAuth();
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [productos, setProductos] = useState<Producto[]>([]);
-  const [movimientos, setMovimientos] = useState<MovimientoStock[]>([]);
+  const [movimientos, setMovimientos] = useState<any[]>([]);
 
   const [tab, setTab] = useState("productos");
   const [tipo, setTipo] = useState("todos");
@@ -41,8 +41,8 @@ export default function StockPage() {
       try {
         setLoading(true);
         const [productosData, movimientosData] = await Promise.all([
-          getProductos(token, { negocioId: user.negocio.id }),
-          getMovimientosStock(token, { negocioId: user.negocio.id }),
+          getProductos(token),
+          getMovimientosStock(token),
         ]);
         setProductos(productosData);
         setMovimientos(movimientosData);
@@ -58,7 +58,7 @@ export default function StockPage() {
   }, [token, user?.negocio?.id]);
 
   const bajoStock = productos.filter((p) => p.stockActual <= (p.stockMinimo || 0));
-  const totalValor = productos.reduce((a, b) => a + b.stockActual * b.costoUnitario, 0);
+  const totalValor = productos.reduce((a, b) => a + b.stockActual * b.costoCompra, 0);
 
   const filtrados = productos.filter((p) => {
     const matchTipo = tipo === "todos" || p.tipo === tipo;
@@ -310,7 +310,7 @@ export default function StockPage() {
                           {p.stockMinimo || 0}
                         </td>
                         <td className="px-4 py-3 text-right text-muted-foreground hidden lg:table-cell">
-                          ${(p.costoUnitario ?? 0).toLocaleString("es-AR")}
+                          ${(p.costoCompra ?? 0).toLocaleString("es-AR")}
                         </td>
                         <td className="px-4 py-3 text-right hidden lg:table-cell">
                           {p.precioVenta ? (
@@ -322,7 +322,7 @@ export default function StockPage() {
                           )}
                         </td>
                         <td className="px-4 py-3 text-muted-foreground hidden xl:table-cell text-xs">
-                          {p.proveedor || "—"}
+                          {p.proveedor?.nombre ?? "—"}
                         </td>
                         <td className="px-4 py-3">
                           <div className="flex items-center gap-1 justify-end">

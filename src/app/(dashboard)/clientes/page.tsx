@@ -43,15 +43,15 @@ const segmentoConfig: Record<string, { label: string; badge: string; icon: any }
   },
 };
 
-function getSegmento(cliente: Cliente): string {
-  if (!cliente.ultimaVisita) return "nuevo";
+function getSegmento(cliente: Cliente): Cliente['segmento'] {
+  if (!cliente.updatedAt) return "nuevo";
 
   const diasDesdeUltimaVisita = Math.floor(
-    (Date.now() - new Date(cliente.ultimaVisita).getTime()) / (1000 * 60 * 60 * 24)
+    (Date.now() - new Date(cliente.updatedAt).getTime()) / (1000 * 60 * 60 * 24)
   );
 
   if (diasDesdeUltimaVisita > 90) return "inactivo";
-  if (cliente.totalVisitas >= 5) return "frecuente";
+  if ((cliente._count?.turnos ?? 0) >= 5) return "frecuente";
   return "nuevo";
 }
 
@@ -81,7 +81,7 @@ export default function ClientesPage() {
     const fetchClientes = async () => {
       try {
         setLoading(true);
-        const data = await getClientes(token, { negocioId: user.negocio.id });
+        const data = await getClientes(token);
         setClientes(data);
       } catch (err: any) {
         setError(err.message || "Error al cargar clientes");
@@ -268,16 +268,14 @@ export default function ClientesPage() {
                             </Badge>
                           </td>
                           <td className="px-4 py-3 text-right text-foreground/80 hidden lg:table-cell">
-                            {cliente.totalVisitas || 0}
+                            {cliente._count?.turnos ?? 0}
                           </td>
                           <td className="px-4 py-3 text-right text-foreground/80 hidden lg:table-cell">
-                            {cliente.ticketPromedio
-                              ? `$${cliente.ticketPromedio.toLocaleString("es-AR")}`
-                              : "—"}
+                            —
                           </td>
                           <td className="px-4 py-3 text-muted-foreground hidden xl:table-cell">
-                            {cliente.ultimaVisita
-                              ? new Date(cliente.ultimaVisita).toLocaleDateString("es-AR")
+                            {cliente.updatedAt
+                              ? new Date(cliente.updatedAt).toLocaleDateString("es-AR")
                               : "—"}
                           </td>
                           <td className="px-4 py-3">
@@ -337,19 +335,15 @@ export default function ClientesPage() {
                 {/* Métricas */}
                 <div className="grid grid-cols-3 gap-2">
                   <div className="bg-muted/40 rounded-lg p-2 text-center">
-                    <p className="text-sm font-bold text-foreground">{seleccionado.totalVisitas || 0}</p>
+                    <p className="text-sm font-bold text-foreground">{seleccionado._count?.turnos ?? 0}</p>
                     <p className="text-[10px] text-muted-foreground">Visitas</p>
                   </div>
                   <div className="bg-muted/40 rounded-lg p-2 text-center">
-                    <p className="text-sm font-bold text-foreground">
-                      {seleccionado.ticketPromedio
-                        ? `$${(seleccionado.ticketPromedio / 1000).toFixed(1)}k`
-                        : "—"}
-                    </p>
+                    <p className="text-sm font-bold text-foreground">—</p>
                     <p className="text-[10px] text-muted-foreground">Ticket</p>
                   </div>
                   <div className="bg-muted/40 rounded-lg p-2 text-center">
-                    <p className="text-sm font-bold text-foreground">{seleccionado.puntos || 0}</p>
+                    <p className="text-sm font-bold text-foreground">{seleccionado.puntosAcumulados || 0}</p>
                     <p className="text-[10px] text-muted-foreground">Puntos</p>
                   </div>
                 </div>
@@ -361,24 +355,24 @@ export default function ClientesPage() {
                   <div className="flex justify-between">
                     <span className="text-muted-foreground">Última visita</span>
                     <span className="text-foreground font-medium">
-                      {seleccionado.ultimaVisita
-                        ? new Date(seleccionado.ultimaVisita).toLocaleDateString("es-AR")
+                      {seleccionado.updatedAt
+                        ? new Date(seleccionado.updatedAt).toLocaleDateString("es-AR")
                         : "—"}
                     </span>
                   </div>
-                  {seleccionado.fechaAlta && (
+                  {seleccionado.createdAt && (
                     <div className="flex justify-between">
                       <span className="text-muted-foreground">Cliente desde</span>
                       <span className="text-foreground font-medium">
-                        {new Date(seleccionado.fechaAlta).toLocaleDateString("es-AR")}
+                        {new Date(seleccionado.createdAt).toLocaleDateString("es-AR")}
                       </span>
                     </div>
                   )}
-                  {seleccionado.notas && (
+                  {seleccionado.observaciones && (
                     <>
                       <div className="flex flex-col gap-1 mt-2">
                         <span className="text-muted-foreground">Notas</span>
-                        <span className="text-foreground">{seleccionado.notas}</span>
+                        <span className="text-foreground">{seleccionado.observaciones}</span>
                       </div>
                     </>
                   )}
@@ -413,7 +407,7 @@ export default function ClientesPage() {
         onOpenChange={setModalNuevoClienteOpen}
         onClienteCreado={() => {
           if (token && user?.negocio?.id) {
-            getClientes(token, { negocioId: user.negocio.id }).then(setClientes);
+            getClientes(token).then(setClientes);
           }
         }}
       />

@@ -68,7 +68,7 @@ export default function EmpleadosPage() {
     const fetchEmpleados = async () => {
       try {
         setLoading(true);
-        const data = await getEmpleados(token, { negocioId: user.negocio.id });
+        const data = await getEmpleados(token);
         setEmpleados(data);
         if (data.length > 0) {
           setSeleccionado(data[0]);
@@ -100,8 +100,8 @@ export default function EmpleadosPage() {
     );
   }
 
-  const totalIngresos = empleados.reduce((a, b) => a + (b.ingresosTotales || 0), 0);
-  const totalTurnos = empleados.reduce((a, b) => a + (b.totalTurnos || 0), 0);
+  const totalIngresos = 0;
+  const totalTurnos = empleados.reduce((a, b) => a + (b._count?.turnos ?? 0), 0);
 
   return (
     <div className="space-y-4">
@@ -190,13 +190,13 @@ export default function EmpleadosPage() {
                         <p className="text-sm font-semibold text-foreground truncate">{emp.nombre}</p>
                         {i === 0 && <Award className="w-3.5 h-3.5 text-amber-400 shrink-0" />}
                       </div>
-                      <p className="text-xs text-muted-foreground">{emp.rol || "Barbero"}</p>
+                      <p className="text-xs text-muted-foreground">{emp.usuario?.rol ?? "Barbero"}</p>
                     </div>
                     <div className="text-right shrink-0">
                       <p className="text-sm font-bold text-foreground">
-                        ${((emp.ingresosTotales || 0) / 1000).toFixed(0)}k
+                        —
                       </p>
-                      <p className="text-[10px] text-muted-foreground">{emp.totalTurnos || 0} turnos</p>
+                      <p className="text-[10px] text-muted-foreground">{emp._count?.turnos ?? 0} turnos</p>
                     </div>
                   </div>
                   <div className="mt-3 flex items-center gap-3">
@@ -248,7 +248,7 @@ export default function EmpleadosPage() {
                           {seleccionado.activo ? "Activo" : "Inactivo"}
                         </Badge>
                       </div>
-                      <p className="text-sm text-muted-foreground">{seleccionado.rol || "Barbero"}</p>
+                      <p className="text-sm text-muted-foreground">{seleccionado.usuario?.rol ?? "Barbero"}</p>
                       <div className="flex flex-wrap gap-4 mt-2">
                         {seleccionado.telefono && (
                           <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
@@ -256,10 +256,10 @@ export default function EmpleadosPage() {
                             {seleccionado.telefono}
                           </div>
                         )}
-                        {seleccionado.email && (
+                        {seleccionado.usuario?.email && (
                           <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
                             <Mail className="w-3.5 h-3.5" />
-                            {seleccionado.email}
+                            {seleccionado.usuario.email}
                           </div>
                         )}
                       </div>
@@ -293,34 +293,29 @@ export default function EmpleadosPage() {
                   <Card className="border-border/50 bg-card">
                     <CardContent className="p-4 text-center">
                       <p className="text-xl font-bold text-blue-400">
-                        {seleccionado.totalTurnos || 0}
+                        {seleccionado._count?.turnos ?? 0}
                       </p>
                       <p className="text-[11px] text-muted-foreground mt-0.5">Turnos / mes</p>
                     </CardContent>
                   </Card>
                   <Card className="border-border/50 bg-card">
                     <CardContent className="p-4 text-center">
-                      <p className="text-xl font-bold text-emerald-400">
-                        ${((seleccionado.ingresosTotales || 0) / 1000).toFixed(1)}k
-                      </p>
+                      <p className="text-xl font-bold text-emerald-400">—</p>
                       <p className="text-[11px] text-muted-foreground mt-0.5">Ingresos</p>
                     </CardContent>
                   </Card>
                   <Card className="border-border/50 bg-card">
                     <CardContent className="p-4 text-center">
-                      <p className="text-xl font-bold text-violet-400">
-                        ${seleccionado.ticketPromedio?.toLocaleString("es-AR") || "—"}
-                      </p>
+                      <p className="text-xl font-bold text-violet-400">—</p>
                       <p className="text-[11px] text-muted-foreground mt-0.5">Ticket prom.</p>
                     </CardContent>
                   </Card>
                   <Card className="border-border/50 bg-card">
                     <CardContent className="p-4 text-center">
                       <p className="text-xl font-bold text-amber-400">
-                        ${(((seleccionado.ingresosTotales || 0) * (seleccionado.comision || 0.35)) / 1000).toFixed(1)}
-                        k
+                        {seleccionado.comisionPorcentaje ?? 35}%
                       </p>
-                      <p className="text-[11px] text-muted-foreground mt-0.5">Comisión</p>
+                      <p className="text-[11px] text-muted-foreground mt-0.5">% Comisión</p>
                     </CardContent>
                   </Card>
 
@@ -330,10 +325,10 @@ export default function EmpleadosPage() {
                     </CardHeader>
                     <CardContent className="px-5 pb-4 space-y-3">
                       {[...empleados]
-                        .sort((a, b) => (b.ingresosTotales || 0) - (a.ingresosTotales || 0))
+                        .sort((a, b) => (b._count?.turnos ?? 0) - (a._count?.turnos ?? 0))
                         .map((e, i, arr) => {
-                          const maxIngresos = empleados[0]?.ingresosTotales || 1;
-                          const pct = Math.round(((e.ingresosTotales || 0) / maxIngresos) * 100);
+                          const maxTurnos = empleados[0]?._count?.turnos ?? 1;
+                          const pct = Math.round(((e._count?.turnos ?? 0) / maxTurnos) * 100);
                           return (
                             <div key={e.id}>
                               <div className="flex items-center gap-3 mb-1.5">
@@ -351,10 +346,10 @@ export default function EmpleadosPage() {
                                 </Avatar>
                                 <span className="text-xs font-medium flex-1">{e.nombre}</span>
                                 <span className="text-xs font-bold">
-                                  ${(e.ingresosTotales || 0).toLocaleString("es-AR")}
+                                  {e._count?.turnos ?? 0} turnos
                                 </span>
                                 <span className="text-[10px] text-muted-foreground w-8 text-right">
-                                  {e.totalTurnos || 0}t
+                                  {e.comisionPorcentaje ?? 35}%
                                 </span>
                               </div>
                               <div className="w-full bg-muted/40 rounded-full h-1.5 ml-8">
@@ -413,9 +408,9 @@ export default function EmpleadosPage() {
                     <CardTitle className="text-sm font-semibold">Servicios habilitados</CardTitle>
                   </CardHeader>
                   <CardContent className="px-5 pb-5">
-                    {seleccionado.servicios && seleccionado.servicios.length > 0 ? (
+                    {(seleccionado as any).servicios && (seleccionado as any).servicios.length > 0 ? (
                       <div className="flex flex-wrap gap-2">
-                        {seleccionado.servicios.map((s: any) => (
+                        {(seleccionado as any).servicios.map((s: any) => (
                           <div
                             key={s.id}
                             className="flex items-center gap-1.5 bg-primary/10 text-primary border border-primary/20 rounded-full px-3 py-1.5 text-xs font-medium"
@@ -440,19 +435,15 @@ export default function EmpleadosPage() {
                   <CardContent className="px-5 pb-5 space-y-4">
                     <div className="grid grid-cols-3 gap-3">
                       <div className="bg-muted/40 rounded-xl p-3 text-center">
-                        <p className="text-base font-bold">{((seleccionado.comision || 0.35) * 100).toFixed(0)}%</p>
+                        <p className="text-base font-bold">{seleccionado.comisionPorcentaje ?? 35}%</p>
                         <p className="text-[10px] text-muted-foreground mt-0.5">Porcentaje</p>
                       </div>
                       <div className="bg-muted/40 rounded-xl p-3 text-center">
-                        <p className="text-base font-bold">
-                          ${(seleccionado.ingresosTotales || 0).toLocaleString("es-AR")}
-                        </p>
+                        <p className="text-base font-bold">—</p>
                         <p className="text-[10px] text-muted-foreground mt-0.5">Base cálculo</p>
                       </div>
                       <div className="bg-muted/40 rounded-xl p-3 text-center">
-                        <p className="text-base font-bold text-emerald-400">
-                          ${((seleccionado.ingresosTotales || 0) * (seleccionado.comision || 0.35)).toLocaleString("es-AR")}
-                        </p>
+                        <p className="text-base font-bold text-emerald-400">—</p>
                         <p className="text-[10px] text-muted-foreground mt-0.5">A cobrar</p>
                       </div>
                     </div>

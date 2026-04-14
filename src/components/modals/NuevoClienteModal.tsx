@@ -53,14 +53,13 @@ export function NuevoClienteModal({ open, onOpenChange, onSuccess, onClienteCrea
       setError(null);
 
       const { createCliente } = await import("@/lib/api");
-      await createCliente(token, {
-        negocioId: user.negocio.id,
+      await createCliente({
         nombre,
         telefono,
         email: email || undefined,
         fechaNacimiento: fechaNacimiento || undefined,
-        notas: notas || undefined,
-      });
+        observaciones: notas || undefined,
+      }, token);
 
       onOpenChange(false);
       onSuccess?.();

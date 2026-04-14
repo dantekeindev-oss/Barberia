@@ -49,8 +49,8 @@ export default function ConfiguracionPage() {
       try {
         setLoading(true);
         const [serviciosData, usuariosData] = await Promise.all([
-          getServicios(token, { negocioId: user.negocio.id }),
-          getUsuarios(token, { negocioId: user.negocio.id }),
+          getServicios(token),
+          getUsuarios(token),
         ]);
         setServicios(serviciosData);
         setUsuarios(usuariosData);
@@ -59,9 +59,9 @@ export default function ConfiguracionPage() {
         if (user.negocio) {
           setDatosNegocio({
             nombre: user.negocio.nombre || "",
-            telefono: user.negocio.telefono || "",
-            email: user.negocio.email || "",
-            direccion: user.negocio.direccion || "",
+            telefono: "",
+            email: "",
+            direccion: "",
           });
         }
       } catch (err: any) {
@@ -169,7 +169,7 @@ export default function ConfiguracionPage() {
                       <div className="flex items-center gap-4 mt-1 text-xs text-muted-foreground">
                         <span className="flex items-center gap-1">
                           <Clock className="w-3 h-3" />
-                          {s.duracion} min
+                          {s.duracionMin} min
                         </span>
                         <span>${s.precio.toLocaleString("es-AR")}</span>
                       </div>

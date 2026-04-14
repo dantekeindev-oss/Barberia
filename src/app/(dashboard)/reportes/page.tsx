@@ -51,10 +51,10 @@ export default function ReportesPage() {
       try {
         setLoading(true);
         const [ventasData, turnosData, serviciosData, empleadosData] = await Promise.all([
-          getVentas(token, { negocioId: user.negocio.id }).catch(() => []),
-          getTurnos(token, { negocioId: user.negocio.id }),
-          getServicios(token, { negocioId: user.negocio.id }),
-          getEmpleados(token, { negocioId: user.negocio.id }),
+          getVentas(token).catch(() => []),
+          getTurnos(token),
+          getServicios(token),
+          getEmpleados(token),
         ]);
         setVentas(ventasData);
         setTurnos(turnosData);
@@ -98,7 +98,7 @@ export default function ReportesPage() {
   // Service distribution based on actual turnos
   const servicioCount: Record<string, number> = {};
   turnos.forEach((t) => {
-    const nombre = t.servicio?.nombre || "Otro";
+    const nombre = t.servicios?.[0]?.servicio?.nombre || "Otro";
     servicioCount[nombre] = (servicioCount[nombre] || 0) + 1;
   });
 

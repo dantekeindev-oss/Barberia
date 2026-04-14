@@ -97,7 +97,7 @@ export function withAuth<P extends object>(
   Component: React.ComponentType<P>
 ): React.ComponentType<P> {
   return function AuthenticatedComponent(props: P) {
-    const { user, loading } = useAuth();
+    const { user, loading, token } = useAuth();
     const router = useRouter();
 
     useEffect(() => {

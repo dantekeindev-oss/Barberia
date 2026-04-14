@@ -93,9 +93,9 @@ export function NuevoTurnoModal({ open, onOpenChange, onSuccess, onTurnoCreado, 
     try {
       setLoading(true);
       const [clientesData, empleadosData, serviciosData] = await Promise.all([
-        getClientes(token, { negocioId: user.negocio.id }),
-        getEmpleados(token, { negocioId: user.negocio.id }),
-        getServicios(token, { negocioId: user.negocio.id }),
+        getClientes(token),
+        getEmpleados(token),
+        getServicios(token),
       ]);
       setClientes(clientesData);
       setEmpleados(empleadosData);
@@ -108,7 +108,7 @@ export function NuevoTurnoModal({ open, onOpenChange, onSuccess, onTurnoCreado, 
     }
   };
 
-  const duracionTotal = serviciosSeleccionados.reduce((acc, s) => acc + s.duracion, 0);
+  const duracionTotal = serviciosSeleccionados.reduce((acc, s) => acc + s.duracionMin, 0);
   const precioTotal = serviciosSeleccionados.reduce((acc, s) => acc + s.precio, 0);
 
   function toggleServicio(servicio: Servicio) {
@@ -130,11 +130,10 @@ export function NuevoTurnoModal({ open, onOpenChange, onSuccess, onTurnoCreado, 
       // Create client if in create mode
       let clienteId = clienteSeleccionado?.id;
       if (modoCrearCliente && nuevoClienteNombre && nuevoClienteTelefono) {
-        const nuevoCliente = await createCliente(token, {
-          negocioId: user.negocio.id,
+        const nuevoCliente = await createCliente({
           nombre: nuevoClienteNombre,
           telefono: nuevoClienteTelefono,
-        });
+        }, token);
         clienteId = nuevoCliente.id;
       }
 
@@ -144,16 +143,18 @@ export function NuevoTurnoModal({ open, onOpenChange, onSuccess, onTurnoCreado, 
       }
 
       // Create turno
-      const fechaHora = new Date(`${fecha}T${hora}`);
-      await createTurno(token, {
-        negocioId: user.negocio.id,
+      const fechaInicio = new Date(`${fecha}T${hora}`);
+      const durTotalMs = serviciosSeleccionados.reduce((acc, s) => acc + s.duracionMin, 0);
+      const fechaFin = new Date(fechaInicio.getTime() + durTotalMs * 60 * 1000);
+      await createTurno({
         clienteId,
         empleadoId: empleadoSeleccionado.id,
-        servicioId: serviciosSeleccionados[0].id, // Primary service
-        fechaHora: fechaHora.toISOString(),
+        servicioIds: serviciosSeleccionados.map(s => s.id),
+        fechaInicio: fechaInicio.toISOString(),
+        fechaFin: fechaFin.toISOString(),
         estado: "pendiente",
-        notas,
-      });
+        notas: notas || undefined,
+      }, token);
 
       // Create additional services as separate turnos or handle differently
       // For now, we'll just create one turno with the primary service
@@ -174,11 +175,10 @@ export function NuevoTurnoModal({ open, onOpenChange, onSuccess, onTurnoCreado, 
 
     try {
       setSubmitting(true);
-      const nuevoCliente = await createCliente(token, {
-        negocioId: user.negocio.id,
+      const nuevoCliente = await createCliente({
         nombre: nuevoClienteNombre,
         telefono: nuevoClienteTelefono,
-      });
+      }, token);
       setClienteSeleccionado(nuevoCliente);
       setModoCrearCliente(false);
       setBusquedaCliente("");
@@ -401,7 +401,7 @@ export function NuevoTurnoModal({ open, onOpenChange, onSuccess, onTurnoCreado, 
                         <div className="flex items-center gap-2 mt-0.5">
                           <span className="text-[10px] text-muted-foreground flex items-center gap-0.5">
                             <Clock className="w-2.5 h-2.5" />
-                            {s.duracion} min
+                            {s.duracionMin} min
                           </span>
                           <span className="text-[10px] text-muted-foreground">·</span>
                           <span className="text-[10px] text-emerald-400">${s.precio.toLocaleString("es-AR")}</span>

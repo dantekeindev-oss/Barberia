@@ -79,9 +79,9 @@ export default function FidelizacionPage() {
       try {
         setLoading(true);
         const [clientesData, membresiasData, cuponesData] = await Promise.all([
-          getClientes(token, { negocioId: user.negocio.id }),
-          getMembresias(token, { negocioId: user.negocio.id }),
-          getCupones(token, { negocioId: user.negocio.id }),
+          getClientes(token),
+          getMembresias(token),
+          getCupones(token),
         ]);
         setClientes(clientesData);
         setMembresias(membresiasData);
@@ -97,9 +97,9 @@ export default function FidelizacionPage() {
     fetchData();
   }, [token, user?.negocio?.id]);
 
-  const totalPuntos = clientes.reduce((a, b) => a + (b.puntos || 0), 0);
+  const totalPuntos = clientes.reduce((a, b) => a + (b.puntosAcumulados || 0), 0);
   const cuponesActivos = cupones.filter((c) => c.activo);
-  const usosCupones = cuponesActivos.reduce((a, b) => a + (b.usos || 0), 0);
+  const usosCupones = cuponesActivos.reduce((a, b) => a + (b.usosActuales || 0), 0);
 
   if (loading) {
     return (
@@ -139,7 +139,7 @@ export default function FidelizacionPage() {
             </div>
             <div>
               <p className="text-lg font-bold text-violet-400">
-                {clientes.filter((c) => c.membresiaId).length}
+                {clientes.filter((c) => (c as any).membresiaId).length}
               </p>
               <p className="text-[11px] text-muted-foreground">Clientes con membresía</p>
             </div>
@@ -228,10 +228,10 @@ export default function FidelizacionPage() {
                       </tr>
                     ) : (
                       clientes
-                        .sort((a, b) => (b.puntos || 0) - (a.puntos || 0))
+                        .sort((a, b) => (b.puntosAcumulados || 0) - (a.puntosAcumulados || 0))
                         .slice(0, 10)
                         .map((c) => {
-                          const puntos = c.puntos || 0;
+                          const puntos = c.puntosAcumulados || 0;
                           const nivel = getNivel(puntos);
                           const config = nivelConfig[nivel];
                           const proximo = getProximoNivel(puntos);
@@ -376,7 +376,7 @@ export default function FidelizacionPage() {
                     <CardTitle className="text-base font-semibold">{m.nombre}</CardTitle>
                   </div>
                   <p className="text-2xl font-bold text-foreground">
-                    ${m.precio.toLocaleString("es-AR")}
+                    ${m.precioMensual.toLocaleString("es-AR")}
                     <span className="text-xs font-normal text-muted-foreground">/mes</span>
                   </p>
                 </CardHeader>
@@ -388,7 +388,7 @@ export default function FidelizacionPage() {
                   <div className="flex items-center gap-2 text-xs text-muted-foreground">
                     <Users className="w-3.5 h-3.5" />
                     <span>
-                      {clientes.filter((c) => c.membresiaId === m.id).length} clientes
+                      {clientes.filter((c) => (c as any).membresiaId === m.id).length} clientes
                       activos
                     </span>
                   </div>
@@ -452,10 +452,10 @@ export default function FidelizacionPage() {
                     <div className="flex items-center justify-between text-xs">
                       <span className="text-muted-foreground">
                         {c.tipoDescuento === "porcentaje"
-                          ? `${c.descuento}%`
-                          : `$${c.descuento}`} de descuento
+                          ? `${c.valor}%`
+                          : `$${c.valor}`} de descuento
                       </span>
-                      <span className="text-muted-foreground">{c.usos || 0} usos</span>
+                      <span className="text-muted-foreground">{c.usosActuales || 0} usos</span>
                     </div>
                   </div>
                 ))}
