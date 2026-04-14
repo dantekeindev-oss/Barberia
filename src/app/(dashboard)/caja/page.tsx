@@ -53,8 +53,8 @@ export default function CajaPage() {
       try {
         setLoading(true);
         const [ventasData, cajasData] = await Promise.all([
-          getVentas(token, { negocioId: user.negocio.id }).catch(() => []),
-          getCajas(token, { negocioId: user.negocio.id }).catch(() => []),
+          getVentas(token).catch(() => []),
+          getCajas(token).catch(() => []),
         ]);
 
         // Filter for today's sales and open caja
@@ -70,7 +70,7 @@ export default function CajaPage() {
         // Fetch movements for open caja
         if (cajaAbierta) {
           try {
-            const movsData = await getMovimientosCaja(token, { negocioId: user.negocio.id });
+            const movsData = await getMovimientosCaja(token);
             setMovimientos(movsData.filter((m) => m.cajaId === cajaAbierta.id));
           } catch (e) {
             console.error("Error loading movimientos:", e);
