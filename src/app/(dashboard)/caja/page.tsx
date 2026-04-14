@@ -40,9 +40,9 @@ export default function CajaPage() {
   const [tab, setTab] = useState("movimientos");
   const [modalCobrarOpen, setModalCobrarOpen] = useState(false);
   const [modalMovimientoOpen, setModalMovimientoOpen] = useState(false);
-  const [modalMovimientoTipo, setModalMovimientoTipo] = useState<"ingreso" | "egreso">("ingreso");
+  const [_modalMovimientoTipo, setModalMovimientoTipo] = useState<"ingreso" | "egreso">("ingreso");
 
-  const [ventas, setVentas] = useState<any[]>([]);
+  const [_ventas, setVentas] = useState<any[]>([]);
   const [cajas, setCajas] = useState<any[]>([]);
   const [movimientos, setMovimientos] = useState<any[]>([]);
 
@@ -60,7 +60,7 @@ export default function CajaPage() {
         // Filter for today's sales and open caja
         const today = new Date().toISOString().split('T')[0];
         const ventasHoy = ventasData.filter((v) =>
-          v.fecha?.startsWith(today)
+          v.createdAt?.startsWith(today)
         );
         const cajaAbierta = cajasData.find((c) => c.estado === "abierta");
 
@@ -362,7 +362,8 @@ export default function CajaPage() {
               ) : (
                 porMedio.map(([medio, monto], i) => {
                   const m = medioIcono[medio] || medioIcono.efectivo;
-                  const pct = Math.round((monto / ingresos) * 100);
+                  const montoNum = monto as number;
+                  const pct = Math.round((montoNum / ingresos) * 100);
                   return (
                     <div key={medio}>
                       <div className="flex items-center gap-2.5 mb-1.5">
@@ -371,7 +372,7 @@ export default function CajaPage() {
                           {m.label}
                         </span>
                         <span className="text-xs font-bold text-foreground">
-                          ${monto.toLocaleString("es-AR")}
+                          ${montoNum.toLocaleString("es-AR")}
                         </span>
                         <span className="text-[10px] text-muted-foreground w-8 text-right">
                           {pct}%
