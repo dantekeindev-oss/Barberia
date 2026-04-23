@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import {
   Scissors,
   Clock,
@@ -14,6 +14,10 @@ import {
   CheckCircle2,
   XCircle,
   Loader2,
+  Palette,
+  ImageIcon,
+  RotateCcw,
+  Upload,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -22,11 +26,26 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from "@/components/ui/select";
 import { useAuth } from "@/contexts/AuthContext";
+import { useBranding } from "@/contexts/BrandingContext";
 import { getServicios, getUsuarios, updateNegocio } from "@/lib/api";
 import type { Servicio, Usuario } from "@/lib/api";
 
+const COLOR_PRESETS = [
+  { name: "Violeta", hex: "#7C3AED" },
+  { name: "Azul", hex: "#2563EB" },
+  { name: "Índigo", hex: "#4F46E5" },
+  { name: "Esmeralda", hex: "#059669" },
+  { name: "Ámbar", hex: "#D97706" },
+  { name: "Naranja", hex: "#EA580C" },
+  { name: "Rojo", hex: "#DC2626" },
+  { name: "Rosa", hex: "#DB2777" },
+  { name: "Carbón", hex: "#374151" },
+];
+
 export default function ConfiguracionPage() {
   const { user, token, refreshUser } = useAuth();
+  const { branding, updateLogo, updateColor, updateNombre } = useBranding();
+  const fileInputRef = useRef<HTMLInputElement>(null);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -126,6 +145,9 @@ export default function ConfiguracionPage() {
           </TabsTrigger>
           <TabsTrigger value="usuarios" className="text-xs px-4">
             Usuarios
+          </TabsTrigger>
+          <TabsTrigger value="personalizacion" className="text-xs px-4">
+            Personalización
           </TabsTrigger>
         </TabsList>
       </Tabs>
@@ -442,6 +464,220 @@ export default function ConfiguracionPage() {
             </table>
           </CardContent>
         </Card>
+      )}
+      {tab === "personalizacion" && (
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+          {/* Logo */}
+          <Card className="border-border/50 bg-card">
+            <CardHeader className="pb-3 px-5 pt-5">
+              <CardTitle className="text-sm font-semibold flex items-center gap-2">
+                <ImageIcon className="w-4 h-4" />
+                Logo del negocio
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="px-5 pb-5 space-y-4">
+              <div className="flex flex-col items-center gap-4">
+                {/* Preview */}
+                <div className="w-full h-36 rounded-xl border-2 border-dashed border-border/50 bg-muted/20 flex items-center justify-center overflow-hidden relative">
+                  {branding.logoUrl ? (
+                    // eslint-disable-next-line @next/next/no-img-element
+                    <img
+                      src={branding.logoUrl}
+                      alt="Logo actual"
+                      className="max-h-full max-w-full object-contain p-4"
+                    />
+                  ) : (
+                    <div className="text-center text-muted-foreground">
+                      <ImageIcon className="w-10 h-10 mx-auto mb-2 opacity-30" />
+                      <p className="text-xs">Sin logo cargado</p>
+                    </div>
+                  )}
+                </div>
+
+                {/* Upload / Remove */}
+                <input
+                  ref={fileInputRef}
+                  type="file"
+                  accept="image/*"
+                  className="hidden"
+                  onChange={(e) => {
+                    const file = e.target.files?.[0];
+                    if (!file) return;
+                    const reader = new FileReader();
+                    reader.onload = (ev) => {
+                      const result = ev.target?.result;
+                      if (typeof result === "string") updateLogo(result);
+                    };
+                    reader.readAsDataURL(file);
+                    e.target.value = "";
+                  }}
+                />
+                <div className="flex gap-2 w-full">
+                  <Button
+                    size="sm"
+                    className="h-9 veylo-gradient text-white border-0 hover:opacity-90 text-xs font-semibold flex-1"
+                    onClick={() => fileInputRef.current?.click()}
+                  >
+                    <Upload className="w-3.5 h-3.5 mr-1.5" />
+                    {branding.logoUrl ? "Cambiar logo" : "Subir logo"}
+                  </Button>
+                  {branding.logoUrl && (
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      className="h-9 text-xs border-border/50 text-destructive hover:bg-destructive/10"
+                      onClick={() => updateLogo(null)}
+                    >
+                      <Trash2 className="w-3.5 h-3.5" />
+                    </Button>
+                  )}
+                </div>
+              </div>
+
+              <div className="space-y-1.5">
+                <label className="text-xs font-medium text-muted-foreground">
+                  Nombre del negocio (sidebar)
+                </label>
+                <Input
+                  value={branding.negocioNombre}
+                  onChange={(e) => updateNombre(e.target.value)}
+                  className="h-9 text-xs"
+                  placeholder="Ej: Barbería El Clásico"
+                />
+              </div>
+
+              <p className="text-[10px] text-muted-foreground">
+                El logo aparece en la barra lateral del sistema. Formatos: JPG, PNG, SVG, WebP. Recomendado: fondo transparente.
+              </p>
+            </CardContent>
+          </Card>
+
+          {/* Colores */}
+          <div className="space-y-4">
+            <Card className="border-border/50 bg-card">
+              <CardHeader className="pb-3 px-5 pt-5">
+                <CardTitle className="text-sm font-semibold flex items-center gap-2">
+                  <Palette className="w-4 h-4" />
+                  Color principal
+                </CardTitle>
+              </CardHeader>
+              <CardContent className="px-5 pb-5 space-y-4">
+                {/* Presets grid */}
+                <div className="grid grid-cols-3 gap-2">
+                  {COLOR_PRESETS.map((preset) => {
+                    const active = branding.primaryHex.toLowerCase() === preset.hex.toLowerCase();
+                    return (
+                      <button
+                        key={preset.hex}
+                        onClick={() => updateColor(preset.hex)}
+                        className={`flex items-center gap-2.5 px-3 py-2.5 rounded-xl border transition-all text-left ${
+                          active
+                            ? "border-primary bg-primary/10 ring-1 ring-primary/40"
+                            : "border-border/40 bg-muted/20 hover:bg-muted/40"
+                        }`}
+                      >
+                        <span
+                          className="w-5 h-5 rounded-full shrink-0 ring-1 ring-black/10"
+                          style={{ backgroundColor: preset.hex }}
+                        />
+                        <span className="text-[11px] font-medium text-foreground truncate">
+                          {preset.name}
+                        </span>
+                      </button>
+                    );
+                  })}
+                </div>
+
+                {/* Custom hex input */}
+                <div className="space-y-1.5">
+                  <label className="text-xs font-medium text-muted-foreground">
+                    Color personalizado
+                  </label>
+                  <div className="flex gap-2 items-center">
+                    <div className="relative flex-1">
+                      <input
+                        type="color"
+                        value={branding.primaryHex}
+                        onChange={(e) => updateColor(e.target.value)}
+                        className="absolute inset-0 opacity-0 cursor-pointer w-full h-full"
+                      />
+                      <div className="flex items-center gap-2.5 h-9 px-3 rounded-lg border border-border/50 bg-muted/20 pointer-events-none">
+                        <span
+                          className="w-5 h-5 rounded-full ring-1 ring-black/10 shrink-0"
+                          style={{ backgroundColor: branding.primaryHex }}
+                        />
+                        <span className="text-xs font-mono text-foreground uppercase">
+                          {branding.primaryHex}
+                        </span>
+                      </div>
+                    </div>
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      className="h-9 text-xs border-border/50 gap-1.5"
+                      onClick={() => updateColor("#7C3AED")}
+                      title="Restablecer color por defecto"
+                    >
+                      <RotateCcw className="w-3.5 h-3.5" />
+                    </Button>
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+
+            {/* Preview card */}
+            <Card className="border-border/50 bg-card overflow-hidden">
+              <CardHeader className="pb-2 px-5 pt-4">
+                <CardTitle className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">
+                  Vista previa
+                </CardTitle>
+              </CardHeader>
+              <CardContent className="px-5 pb-5">
+                <div className="rounded-xl overflow-hidden border border-border/30 flex h-28">
+                  {/* Mini sidebar */}
+                  <div className="w-14 bg-sidebar border-r border-sidebar-border flex flex-col items-center py-3 gap-2 shrink-0">
+                    <div
+                      className="w-7 h-7 rounded-lg flex items-center justify-center"
+                      style={{ background: `linear-gradient(135deg, ${branding.primaryHex}cc, ${branding.primaryHex})` }}
+                    >
+                      <Scissors className="w-3.5 h-3.5 text-white" />
+                    </div>
+                    {[0, 1, 2].map((i) => (
+                      <div
+                        key={i}
+                        className="w-7 h-7 rounded-lg flex items-center justify-center"
+                        style={i === 0 ? { backgroundColor: `${branding.primaryHex}22`, color: branding.primaryHex } : {}}
+                      >
+                        <div
+                          className={`w-3.5 h-3.5 rounded-sm ${i === 0 ? "" : "bg-sidebar-foreground/10"}`}
+                          style={i === 0 ? { backgroundColor: branding.primaryHex } : {}}
+                        />
+                      </div>
+                    ))}
+                  </div>
+                  {/* Mini content */}
+                  <div className="flex-1 bg-background p-3 flex flex-col gap-2">
+                    <div className="flex gap-2">
+                      <div className="h-5 w-16 rounded-md" style={{ backgroundColor: `${branding.primaryHex}22` }} />
+                      <div className="h-5 w-10 rounded-md bg-muted/40" />
+                    </div>
+                    <div className="grid grid-cols-3 gap-1.5 flex-1">
+                      {[0, 1, 2].map((i) => (
+                        <div key={i} className="rounded-lg bg-card border border-border/30 p-2 flex flex-col gap-1">
+                          <div className="w-full h-1.5 rounded-full bg-muted/50" />
+                          <div
+                            className={`w-2/3 h-2.5 rounded-full ${i !== 0 ? "bg-muted/30" : ""}`}
+                            style={i === 0 ? { backgroundColor: branding.primaryHex } : undefined}
+                          />
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+          </div>
+        </div>
       )}
     </div>
   );

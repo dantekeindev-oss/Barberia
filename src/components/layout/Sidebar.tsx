@@ -19,6 +19,7 @@ import {
 import { cn } from "@/lib/utils";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { Separator } from "@/components/ui/separator";
+import { useBranding } from "@/contexts/BrandingContext";
 
 const navItems = [
   {
@@ -52,6 +53,7 @@ interface SidebarProps {
 
 export function Sidebar({ collapsed = false }: SidebarProps) {
   const pathname = usePathname();
+  const { branding } = useBranding();
 
   function isActive(href: string) {
     if (href === "/dashboard") return pathname === "/dashboard";
@@ -78,21 +80,46 @@ export function Sidebar({ collapsed = false }: SidebarProps) {
       <div
         className={cn(
           "flex items-center h-16 border-b border-sidebar-border px-4 shrink-0",
-          collapsed ? "justify-center" : "gap-2.5"
+          collapsed ? "justify-center" : "gap-3"
         )}
       >
         {collapsed ? (
-          <div className="w-8 h-8 rounded-lg veylo-gradient flex items-center justify-center">
-            <Scissors className="w-4 h-4 text-white" />
-          </div>
+          branding.logoUrl ? (
+            <div className="w-8 h-8 rounded-lg overflow-hidden bg-sidebar-accent flex items-center justify-center shrink-0">
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img src={branding.logoUrl} alt="Logo" className="w-full h-full object-cover" />
+            </div>
+          ) : (
+            <div className="w-8 h-8 rounded-lg veylo-gradient flex items-center justify-center shrink-0">
+              <Scissors className="w-4 h-4 text-white" />
+            </div>
+          )
+        ) : branding.logoUrl ? (
+          <>
+            <div className="w-9 h-9 rounded-lg overflow-hidden bg-sidebar-accent flex items-center justify-center shrink-0">
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img src={branding.logoUrl} alt="Logo" className="w-full h-full object-cover" />
+            </div>
+            <div className="flex flex-col min-w-0">
+              <span className="text-sm font-semibold text-sidebar-foreground truncate leading-tight">
+                {branding.negocioNombre}
+              </span>
+              <span className="text-[10px] text-muted-foreground leading-tight">Sistema de gestión</span>
+            </div>
+          </>
         ) : (
-          <Image
-            src="/images/logo.png"
-            alt="Veylo"
-            width={100}
-            height={32}
-            className="object-contain brightness-0 invert opacity-90"
-          />
+          <div className="flex flex-col min-w-0">
+            <Image
+              src="/images/logo.png"
+              alt="Veylo"
+              width={90}
+              height={28}
+              className="object-contain brightness-0 invert opacity-90"
+            />
+            <span className="text-[10px] text-muted-foreground leading-tight mt-0.5 truncate">
+              {branding.negocioNombre}
+            </span>
+          </div>
         )}
       </div>
 

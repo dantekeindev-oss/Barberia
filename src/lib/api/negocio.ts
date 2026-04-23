@@ -1,4 +1,4 @@
-import { api } from '../api-client';
+import { turnos, clientes, empleados, servicios, productos, NEGOCIO_ID } from '../mock/data';
 
 export interface Negocio {
   id: string;
@@ -8,14 +8,8 @@ export interface Negocio {
   telefono?: string;
   email?: string;
   timezone: string;
-  configuracion?: any;
-  _count?: {
-    usuarios: number;
-    clientes: number;
-    empleados: number;
-    turnos: number;
-    ventas: number;
-  };
+  configuracion?: unknown;
+  _count?: { usuarios: number; clientes: number; empleados: number; turnos: number; ventas: number };
 }
 
 export interface DashboardData {
@@ -26,17 +20,56 @@ export interface DashboardData {
     turnosHoy: number;
     facturadoHoy: number;
   };
-  proximosTurnos: any[];
+  proximosTurnos: unknown[];
   alertas: {
-    clientesBajoPuntos: any[];
-    productosBajoStock: any[];
+    clientesBajoPuntos: unknown[];
+    productosBajoStock: unknown[];
   };
 }
 
-export async function getDashboard(negocioId: string, token: string): Promise<DashboardData> {
-  return api.get<DashboardData>(`/negocio/${negocioId}/dashboard`, token);
+const NEGOCIO_DATA: Negocio = {
+  id: NEGOCIO_ID,
+  nombre: 'Barbería El Clásico',
+  logoUrl: undefined,
+  direccion: 'Av. Corrientes 1234, CABA',
+  telefono: '+54 11 4567-8900',
+  email: 'info@elclasico.com',
+  timezone: 'America/Argentina/Buenos_Aires',
+};
+
+export async function getDashboard(_negocioId: string, _token: string): Promise<DashboardData> {
+  await delay(350);
+  const todayStr = new Date().toISOString().split('T')[0];
+  const turnosHoy = turnos.filter(t => t.fechaInicio.startsWith(todayStr));
+  const finalizadosHoy = turnosHoy.filter(t => t.estado === 'finalizado');
+  const facturadoHoy = finalizadosHoy.reduce((sum, t) => sum + t.servicios.reduce((s, sv) => s + sv.precioAplicado, 0), 0);
+  const now = new Date().toISOString();
+  const proximos = turnos
+    .filter(t => t.fechaInicio >= now && (t.estado === 'pendiente' || t.estado === 'confirmado'))
+    .sort((a, b) => a.fechaInicio.localeCompare(b.fechaInicio))
+    .slice(0, 5);
+  const productosBajoStock = productos.filter(p => p.stockActual <= p.stockMinimo);
+  const clientesBajoPuntos = clientes.filter(c => c.puntosAcumulados < 100 && c.segmento !== 'nuevo');
+
+  return {
+    resumen: {
+      totalClientes: clientes.length,
+      totalEmpleados: empleados.filter(e => e.activo).length,
+      totalServicios: servicios.filter(s => s.activo).length,
+      turnosHoy: turnosHoy.length,
+      facturadoHoy,
+    },
+    proximosTurnos: proximos,
+    alertas: { clientesBajoPuntos, productosBajoStock },
+  };
 }
 
-export async function updateNegocio(id: string, data: Partial<Negocio>, token: string): Promise<Negocio> {
-  return api.patch<Negocio>(`/negocio/${id}`, data, token);
+export async function updateNegocio(_id: string, data: Partial<Negocio>, _token: string): Promise<Negocio> {
+  await delay(300);
+  Object.assign(NEGOCIO_DATA, data);
+  return { ...NEGOCIO_DATA };
+}
+
+function delay(ms: number) {
+  return new Promise(r => setTimeout(r, ms));
 }

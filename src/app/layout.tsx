@@ -3,6 +3,7 @@ import { Inter } from "next/font/google";
 import "./globals.css";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { AuthProvider } from "@/contexts/AuthContext";
+import { BrandingProvider } from "@/contexts/BrandingContext";
 
 const inter = Inter({
   subsets: ["latin"],
@@ -23,11 +24,13 @@ export default function RootLayout({
   return (
     <html lang="es" className={`${inter.variable} dark`} suppressHydrationWarning>
       <body className="min-h-screen bg-background text-foreground antialiased">
-        <AuthProvider>
-          <TooltipProvider delay={300}>
-            {children}
-          </TooltipProvider>
-        </AuthProvider>
+        <BrandingProvider>
+          <AuthProvider>
+            <TooltipProvider delay={300}>
+              {children}
+            </TooltipProvider>
+          </AuthProvider>
+        </BrandingProvider>
       </body>
     </html>
   );

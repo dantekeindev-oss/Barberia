@@ -1,4 +1,4 @@
-import { api, ApiError } from '../api-client';
+import { MOCK_USER, nextId } from '../mock/data';
 
 export interface LoginCredentials {
   email: string;
@@ -20,23 +20,6 @@ export interface AuthResponse {
   };
 }
 
-export async function login(credentials: LoginCredentials): Promise<AuthResponse> {
-  return api.post<AuthResponse>('/auth/login', credentials);
-}
-
-export async function getProfile(token: string): Promise<AuthResponse['user']> {
-  return api.get<AuthResponse['user']>('/auth/me', token);
-}
-
-export async function register(data: {
-  nombre: string;
-  email: string;
-  password: string;
-  nombreNegocio: string;
-}): Promise<AuthResponse> {
-  return api.post<AuthResponse>('/auth/register', data);
-}
-
 export interface Usuario {
   id: string;
   nombre: string;
@@ -46,12 +29,39 @@ export interface Usuario {
   negocioId: string;
 }
 
-export async function getUsuarios(token: string, filters?: {
-  negocioId?: string;
-}): Promise<Usuario[]> {
-  const params = new URLSearchParams();
-  if (filters?.negocioId) params.append('negocioId', filters.negocioId);
+const MOCK_TOKEN = 'mock-jwt-token-demo';
 
-  const query = params.toString();
-  return api.get<Usuario[]>(`/auth/usuarios${query ? `?${query}` : ''}`, token);
+export async function login(_credentials: LoginCredentials): Promise<AuthResponse> {
+  await delay(300);
+  return { access_token: MOCK_TOKEN, user: MOCK_USER };
+}
+
+export async function getProfile(_token: string): Promise<AuthResponse['user']> {
+  await delay(100);
+  return MOCK_USER;
+}
+
+export async function register(data: {
+  nombre: string;
+  email: string;
+  password: string;
+  nombreNegocio: string;
+}): Promise<AuthResponse> {
+  await delay(400);
+  return {
+    access_token: MOCK_TOKEN,
+    user: { ...MOCK_USER, id: nextId('usr'), nombre: data.nombre, email: data.email, negocio: { id: MOCK_USER.negocio.id, nombre: data.nombreNegocio } },
+  };
+}
+
+export async function getUsuarios(_token: string, _filters?: { negocioId?: string }): Promise<Usuario[]> {
+  await delay(200);
+  return [
+    { id: 'usr-001', nombre: 'Admin', email: 'admin@demo.com', rol: 'ADMIN', activo: true, negocioId: MOCK_USER.negocio.id },
+    { id: 'usr-002', nombre: 'Carlos García', email: 'carlos@barberia.com', rol: 'BARBERO', activo: true, negocioId: MOCK_USER.negocio.id },
+  ];
+}
+
+function delay(ms: number) {
+  return new Promise(r => setTimeout(r, ms));
 }
