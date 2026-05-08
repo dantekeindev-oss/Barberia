@@ -27,8 +27,20 @@ import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from "@/components/ui/select";
 import { useAuth } from "@/contexts/AuthContext";
 import { useBranding } from "@/contexts/BrandingContext";
-import { getServicios, getUsuarios, updateNegocio } from "@/lib/api";
-import type { Servicio, Usuario } from "@/lib/api";
+import { getServicios, getUsuarios, getEmpleados, updateNegocio, deleteServicio, deleteEmpleado } from "@/lib/api";
+import type { Servicio, Usuario, Empleado } from "@/lib/api";
+import { ServicioModal } from "@/components/modals/ServicioModal";
+import { EmpleadoModal } from "@/components/modals/EmpleadoModal";
+
+const DEFAULT_HORARIOS = [
+  { dia: "Lunes", activo: true, inicio: "09:00", fin: "18:00" },
+  { dia: "Martes", activo: true, inicio: "09:00", fin: "18:00" },
+  { dia: "Miércoles", activo: true, inicio: "09:00", fin: "18:00" },
+  { dia: "Jueves", activo: true, inicio: "09:00", fin: "18:00" },
+  { dia: "Viernes", activo: true, inicio: "09:00", fin: "20:00" },
+  { dia: "Sábado", activo: true, inicio: "09:00", fin: "14:00" },
+  { dia: "Domingo", activo: false, inicio: "09:00", fin: "13:00" },
+];
 
 const COLOR_PRESETS = [
   { name: "Violeta", hex: "#7C3AED" },
@@ -53,6 +65,27 @@ export default function ConfiguracionPage() {
   const [tab, setTab] = useState("servicios");
   const [servicios, setServicios] = useState<Servicio[]>([]);
   const [usuarios, setUsuarios] = useState<Usuario[]>([]);
+  const [empleados, setEmpleados] = useState<Empleado[]>([]);
+
+  // Servicio modal
+  const [servicioModalOpen, setServicioModalOpen] = useState(false);
+  const [servicioEditar, setServicioEditar] = useState<Servicio | null>(null);
+
+  // Empleado modal
+  const [empleadoModalOpen, setEmpleadoModalOpen] = useState(false);
+  const [empleadoEditar, setEmpleadoEditar] = useState<Empleado | null>(null);
+
+  // Horarios state — persisted in localStorage
+  const [horarios, setHorarios] = useState(() => {
+    if (typeof window !== "undefined") {
+      try {
+        const saved = localStorage.getItem("barberia_horarios");
+        if (saved) return JSON.parse(saved) as typeof DEFAULT_HORARIOS;
+      } catch {}
+    }
+    return DEFAULT_HORARIOS;
+  });
+  const [horariosSaving, setHorariosSaving] = useState(false);
 
   const [datosNegocio, setDatosNegocio] = useState({
     nombre: "",
@@ -67,12 +100,14 @@ export default function ConfiguracionPage() {
     const fetchData = async () => {
       try {
         setLoading(true);
-        const [serviciosData, usuariosData] = await Promise.all([
-          getServicios(token),
+        const [serviciosData, usuariosData, empleadosData] = await Promise.all([
+          getServicios(token, true),
           getUsuarios(token),
+          getEmpleados(token, true),
         ]);
         setServicios(serviciosData);
         setUsuarios(usuariosData);
+        setEmpleados(empleadosData);
 
         // Set business data from user context
         if (user.negocio) {
@@ -83,16 +118,51 @@ export default function ConfiguracionPage() {
             direccion: "",
           });
         }
-      } catch (err: any) {
-        setError(err.message || "Error al cargar datos de configuración");
-        console.error("Error loading configuracion:", err);
+      } catch (err: unknown) {
+        setError(err instanceof Error ? err.message : "Error al cargar datos de configuración");
       } finally {
         setLoading(false);
       }
     };
 
     fetchData();
-  }, [token, user?.negocio?.id, user?.negocio]);
+  }, [token, user?.negocio?.id]);
+
+  async function refetchData() {
+    if (!token) return;
+    try {
+      const [serviciosData, empleadosData] = await Promise.all([
+        getServicios(token, true),
+        getEmpleados(token, true),
+      ]);
+      setServicios(serviciosData);
+      setEmpleados(empleadosData);
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : "Error al actualizar los datos");
+    }
+  }
+
+  async function handleDeleteServicio(id: string) {
+    if (!token || !confirm("¿Eliminar este servicio?")) return;
+    await deleteServicio(id, token);
+    await refetchData();
+  }
+
+  async function handleDeleteEmpleado(id: string) {
+    if (!token || !confirm("¿Eliminar este empleado?")) return;
+    await deleteEmpleado(id, token);
+    await refetchData();
+  }
+
+  async function handleGuardarHorarios() {
+    setHorariosSaving(true);
+    try {
+      localStorage.setItem("barberia_horarios", JSON.stringify(horarios));
+      await new Promise(r => setTimeout(r, 200));
+    } finally {
+      setHorariosSaving(false);
+    }
+  }
 
   async function handleGuardarNegocio() {
     if (!token || !user?.negocio?.id) return;
@@ -107,8 +177,8 @@ export default function ConfiguracionPage() {
       await refreshUser();
 
       alert("Datos del negocio actualizados correctamente");
-    } catch (err: any) {
-      setError(err.message || "Error al guardar datos del negocio");
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : "Error al guardar datos del negocio");
     } finally {
       setSaving(false);
     }
@@ -134,21 +204,12 @@ export default function ConfiguracionPage() {
     <div className="space-y-4">
       <Tabs value={tab} onValueChange={setTab}>
         <TabsList className="h-9">
-          <TabsTrigger value="servicios" className="text-xs px-4">
-            Servicios
-          </TabsTrigger>
-          <TabsTrigger value="horarios" className="text-xs px-4">
-            Horarios
-          </TabsTrigger>
-          <TabsTrigger value="negocio" className="text-xs px-4">
-            Negocio
-          </TabsTrigger>
-          <TabsTrigger value="usuarios" className="text-xs px-4">
-            Usuarios
-          </TabsTrigger>
-          <TabsTrigger value="personalizacion" className="text-xs px-4">
-            Personalización
-          </TabsTrigger>
+          <TabsTrigger value="servicios" className="text-xs px-4">Servicios</TabsTrigger>
+          <TabsTrigger value="empleados" className="text-xs px-4">Empleados</TabsTrigger>
+          <TabsTrigger value="horarios" className="text-xs px-4">Horarios</TabsTrigger>
+          <TabsTrigger value="negocio" className="text-xs px-4">Negocio</TabsTrigger>
+          <TabsTrigger value="usuarios" className="text-xs px-4">Usuarios</TabsTrigger>
+          <TabsTrigger value="personalizacion" className="text-xs px-4">Personalización</TabsTrigger>
         </TabsList>
       </Tabs>
 
@@ -159,6 +220,7 @@ export default function ConfiguracionPage() {
             <Button
               size="sm"
               className="h-8 veylo-gradient text-white border-0 hover:opacity-90 text-xs font-semibold"
+              onClick={() => { setServicioEditar(null); setServicioModalOpen(true); }}
             >
               <Plus className="w-3.5 h-3.5 mr-1.5" />
               Nuevo servicio
@@ -200,13 +262,61 @@ export default function ConfiguracionPage() {
                       <button
                         className="p-2 rounded-lg hover:bg-muted/50 transition-colors"
                         title="Editar"
+                        onClick={() => { setServicioEditar(s); setServicioModalOpen(true); }}
                       >
                         <Edit className="w-4 h-4 text-muted-foreground" />
                       </button>
                       <button
                         className="p-2 rounded-lg hover:bg-destructive/10 hover:text-destructive transition-colors"
                         title="Eliminar"
+                        onClick={() => handleDeleteServicio(s.id)}
                       >
+                        <Trash2 className="w-4 h-4 text-muted-foreground" />
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              ))
+            )}
+          </CardContent>
+        </Card>
+      )}
+
+      {tab === "empleados" && (
+        <Card className="border-border/50 bg-card">
+          <CardHeader className="pb-3 px-5 pt-5 flex items-center justify-between">
+            <CardTitle className="text-sm font-semibold">Empleados</CardTitle>
+            <Button size="sm" className="h-8 veylo-gradient text-white border-0 hover:opacity-90 text-xs font-semibold" onClick={() => { setEmpleadoEditar(null); setEmpleadoModalOpen(true); }}>
+              <Plus className="w-3.5 h-3.5 mr-1.5" />
+              Nuevo empleado
+            </Button>
+          </CardHeader>
+          <CardContent className="px-5 pb-5 space-y-2">
+            {empleados.length === 0 ? (
+              <p className="text-sm text-muted-foreground py-8 text-center">No hay empleados registrados</p>
+            ) : (
+              empleados.map((e) => (
+                <div key={e.id} className={`border ${e.activo ? "border-border/50" : "border-border/20 opacity-60"} rounded-xl p-4`}>
+                  <div className="flex items-center gap-4">
+                    <div className="w-10 h-10 rounded-full bg-primary/15 flex items-center justify-center shrink-0 text-sm font-bold text-primary">
+                      {e.nombre.slice(0, 2).toUpperCase()}
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center gap-2">
+                        <p className="text-sm font-semibold text-foreground">{e.nombre} {e.apellido}</p>
+                        {!e.activo && <Badge className="bg-muted/50 text-muted-foreground border-border text-[10px]">Inactivo</Badge>}
+                      </div>
+                      <div className="flex items-center gap-4 mt-1 text-xs text-muted-foreground">
+                        {e.telefono && <span>{e.telefono}</span>}
+                        {e.especialidades && <span>{e.especialidades}</span>}
+                        <span>Comisión: {e.comisionPorcentaje}%</span>
+                      </div>
+                    </div>
+                    <div className="flex items-center gap-1">
+                      <button className="p-2 rounded-lg hover:bg-muted/50 transition-colors" title="Editar" onClick={() => { setEmpleadoEditar(e); setEmpleadoModalOpen(true); }}>
+                        <Edit className="w-4 h-4 text-muted-foreground" />
+                      </button>
+                      <button className="p-2 rounded-lg hover:bg-destructive/10 hover:text-destructive transition-colors" title="Eliminar" onClick={() => handleDeleteEmpleado(e.id)}>
                         <Trash2 className="w-4 h-4 text-muted-foreground" />
                       </button>
                     </div>
@@ -224,57 +334,50 @@ export default function ConfiguracionPage() {
             <CardTitle className="text-sm font-semibold">Horarios de atención</CardTitle>
           </CardHeader>
           <CardContent className="px-5 pb-5 space-y-2">
-            {["Lunes", "Martes", "Miércoles", "Jueves", "Viernes", "Sábado", "Domingo"].map(
-              (dia, i) => (
-                <div
-                  key={dia}
-                  className="flex items-center gap-4 p-3 rounded-lg border border-border/30 bg-muted/20"
-                >
-                  <div className="w-24 shrink-0">
-                    <p className="text-sm font-medium text-foreground">{dia}</p>
-                    {i === 6 && <p className="text-[10px] text-muted-foreground">Cerrado</p>}
-                  </div>
-                  {i !== 6 ? (
-                    <div className="flex items-center gap-2 text-sm">
-                      <Input
-                        type="time"
-                        defaultValue={i === 6 ? "" : "09:00"}
-                        disabled={i === 6}
-                        className="w-28 h-8 text-xs"
-                      />
-                      <span className="text-muted-foreground">–</span>
-                      <Input
-                        type="time"
-                        defaultValue={i === 4 ? "20:00" : i === 6 ? "" : "18:00"}
-                        disabled={i === 6}
-                        className="w-28 h-8 text-xs"
-                      />
-                    </div>
-                  ) : (
-                    <span className="text-sm text-muted-foreground">No atiende</span>
-                  )}
-                  <div className="ml-auto">
-                    <button
-                      className={`text-[10px] px-3 py-1 rounded-full font-medium transition-colors ${
-                        i !== 6
-                          ? "bg-emerald-500/10 text-emerald-400 hover:bg-emerald-500/20"
-                          : "bg-muted/50 text-muted-foreground hover:bg-muted"
-                      }`}
-                    >
-                      {i !== 6 ? "Activo" : "Activar"}
-                    </button>
-                  </div>
+            {horarios.map((h, i) => (
+              <div key={h.dia} className={`flex items-center gap-4 p-3 rounded-lg border transition-colors ${h.activo ? "border-border/30 bg-muted/20" : "border-border/20 bg-muted/10 opacity-60"}`}>
+                <div className="w-24 shrink-0">
+                  <p className="text-sm font-medium text-foreground">{h.dia}</p>
                 </div>
-              )
-            )}
+                {h.activo ? (
+                  <div className="flex items-center gap-2">
+                    <Input
+                      type="time"
+                      value={h.inicio}
+                      onChange={(e) => setHorarios(prev => prev.map((x, j) => j === i ? { ...x, inicio: e.target.value } : x))}
+                      className="w-28 h-8 text-xs"
+                    />
+                    <span className="text-muted-foreground text-sm">–</span>
+                    <Input
+                      type="time"
+                      value={h.fin}
+                      onChange={(e) => setHorarios(prev => prev.map((x, j) => j === i ? { ...x, fin: e.target.value } : x))}
+                      className="w-28 h-8 text-xs"
+                    />
+                  </div>
+                ) : (
+                  <span className="text-sm text-muted-foreground">No atiende</span>
+                )}
+                <div className="ml-auto">
+                  <button
+                    onClick={() => setHorarios(prev => prev.map((x, j) => j === i ? { ...x, activo: !x.activo } : x))}
+                    className={`text-[10px] px-3 py-1 rounded-full font-medium transition-colors ${h.activo ? "bg-emerald-500/10 text-emerald-400 hover:bg-emerald-500/20" : "bg-muted/50 text-muted-foreground hover:bg-muted"}`}
+                  >
+                    {h.activo ? "Activo" : "Activar"}
+                  </button>
+                </div>
+              </div>
+            ))}
           </CardContent>
           <CardContent className="px-5 pb-5 pt-0">
             <Button
               size="sm"
               className="h-9 veylo-gradient text-white border-0 hover:opacity-90 text-xs font-semibold w-full"
+              onClick={handleGuardarHorarios}
+              disabled={horariosSaving}
             >
-              <Save className="w-3.5 h-3.5 mr-1.5" />
-              Guardar cambios
+              {horariosSaving ? <Loader2 className="w-3.5 h-3.5 animate-spin mr-1.5" /> : <Save className="w-3.5 h-3.5 mr-1.5" />}
+              Guardar horarios
             </Button>
           </CardContent>
         </Card>
@@ -393,6 +496,8 @@ export default function ConfiguracionPage() {
             <Button
               size="sm"
               className="h-8 veylo-gradient text-white border-0 hover:opacity-90 text-xs font-semibold"
+              disabled
+              title="Próximamente"
             >
               <Plus className="w-3.5 h-3.5 mr-1.5" />
               Nuevo usuario
@@ -679,6 +784,19 @@ export default function ConfiguracionPage() {
           </div>
         </div>
       )}
+
+      <ServicioModal
+        open={servicioModalOpen}
+        onClose={() => setServicioModalOpen(false)}
+        onSuccess={() => { setServicioModalOpen(false); refetchData(); }}
+        servicio={servicioEditar}
+      />
+      <EmpleadoModal
+        open={empleadoModalOpen}
+        onClose={() => setEmpleadoModalOpen(false)}
+        onSuccess={() => { setEmpleadoModalOpen(false); refetchData(); }}
+        empleado={empleadoEditar}
+      />
     </div>
   );
 }

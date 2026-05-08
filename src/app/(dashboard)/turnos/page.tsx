@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import {
   ChevronLeft,
   ChevronRight,
@@ -24,6 +24,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { NuevoTurnoModal } from "@/components/modals/NuevoTurnoModal";
+import { EditarTurnoModal } from "@/components/modals/EditarTurnoModal";
 import { useAuth } from "@/contexts/AuthContext";
 import { getTurnos, getEmpleados, getServicios } from "@/lib/api";
 import type { Turno, Empleado, Servicio } from "@/lib/api";
@@ -44,8 +45,8 @@ const estadoConfig: Record<string, { label: string; cell: string; badge: string 
     cell: "bg-blue-500/20 border-l-2 border-blue-400 text-blue-200",
     badge: "bg-blue-500/15 text-blue-400 border-blue-500/30",
   },
-  completado: {
-    label: "Completado",
+  finalizado: {
+    label: "Finalizado",
     cell: "bg-muted/30 border-l-2 border-border text-muted-foreground",
     badge: "bg-muted/30 text-muted-foreground border-border",
   },
@@ -73,6 +74,8 @@ export default function TurnosPage() {
   const [vista, setVista] = useState<"dia" | "semana">("dia");
   const [barberoFiltro, setBarberoFiltro] = useState("todos");
   const [modalNuevoTurnoOpen, setModalNuevoTurnoOpen] = useState(false);
+  const [modalEditarOpen, setModalEditarOpen] = useState(false);
+  const [turnoSeleccionado, setTurnoSeleccionado] = useState<Turno | null>(null);
   const [fecha, setFecha] = useState(new Date());
   const [loading, setLoading] = useState(true);
   const [turnos, setTurnos] = useState<Turno[]>([]);
@@ -96,16 +99,49 @@ export default function TurnosPage() {
         setTurnos(turnosData);
         setEmpleados(empleadosData);
         setServicios(serviciosData);
-      } catch (err: any) {
-        setError(err.message || "Error al cargar los datos");
-        console.error("Error loading turnos:", err);
+      } catch (err: unknown) {
+        setError(err instanceof Error ? err.message : "Error al cargar los datos");
       } finally {
         setLoading(false);
       }
     };
 
     fetchData();
-  }, [token, user?.negocio?.id, fecha]);
+  }, [token, user?.negocio?.id, fecha, vista]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  function refreshTurnos() {
+    if (!token) return;
+    getTurnos(token, { fechaInicio: fecha.toISOString().split('T')[0] }).then(setTurnos);
+  }
+
+  function openEditarTurno(turno: Turno) {
+    setTurnoSeleccionado(turno);
+    setModalEditarOpen(true);
+  }
+
+  // Semana: lunes al domingo de la semana de `fecha`
+  function getSemana() {
+    const d = new Date(fecha);
+    const day = d.getDay();
+    const diff = day === 0 ? -6 : 1 - day;
+    const lunes = new Date(d);
+    lunes.setDate(d.getDate() + diff);
+    return Array.from({ length: 7 }, (_, i) => {
+      const dia = new Date(lunes);
+      dia.setDate(lunes.getDate() + i);
+      return dia;
+    });
+  }
+
+  const semana = getSemana();
+  const turnosSemana = vista === "semana"
+    ? turnos.filter(t => {
+        const d = new Date(t.fechaInicio).toISOString().split('T')[0];
+        const matchesDia = semana.some(s => s.toISOString().split('T')[0] === d);
+        const matchesBarbero = barberoFiltro === "todos" || t.empleadoId === barberoFiltro;
+        return matchesDia && matchesBarbero;
+      })
+    : [];
 
   const fechaStr = fecha.toLocaleDateString("es-AR", {
     weekday: "long",
@@ -117,8 +153,6 @@ export default function TurnosPage() {
     { id: "todos", nombre: "Todos" },
     ...empleados.map(e => ({ id: e.id, nombre: e.nombre })),
   ];
-
-  const barberosFiltrados = empleados;
 
   function getTurno(hora: string, empleadoId: string) {
     const turnoHora = turnos.find(t => {
@@ -133,20 +167,16 @@ export default function TurnosPage() {
     return turnoHora;
   }
 
-  function getStats() {
-    return {
-      total: turnos.length,
-      confirmados: turnos.filter(t => t.estado === "confirmado" || t.estado === "en_curso").length,
-      pendientes: turnos.filter(t => t.estado === "pendiente").length,
-      cancelados: turnos.filter(t => t.estado === "cancelado" || t.estado === "ausente").length,
-    };
-  }
+  const stats = useMemo(() => ({
+    total: turnos.length,
+    confirmados: turnos.filter(t => t.estado === "confirmado" || t.estado === "en_curso").length,
+    pendientes: turnos.filter(t => t.estado === "pendiente").length,
+    cancelados: turnos.filter(t => t.estado === "cancelado" || t.estado === "ausente").length,
+  }), [turnos]);
 
-  const stats = getStats();
-  const cols =
-    barberoFiltro === "todos"
-      ? barberosFiltrados
-      : barberosFiltrados.filter((b) => b.id === barberoFiltro);
+  const cols = barberoFiltro === "todos"
+    ? empleados
+    : empleados.filter((b) => b.id === barberoFiltro);
 
   if (loading) {
     return (
@@ -175,7 +205,7 @@ export default function TurnosPage() {
               variant="ghost"
               size="icon"
               className="w-8 h-8"
-              onClick={() => setFecha(d => new Date(d.setDate(d.getDate() - 1)))}
+              onClick={() => setFecha(d => { const c = new Date(d); c.setDate(c.getDate() - 1); return c; })}
             >
               <ChevronLeft className="w-4 h-4" />
             </Button>
@@ -186,7 +216,7 @@ export default function TurnosPage() {
               variant="ghost"
               size="icon"
               className="w-8 h-8"
-              onClick={() => setFecha(d => new Date(d.setDate(d.getDate() + 1)))}
+              onClick={() => setFecha(d => { const c = new Date(d); c.setDate(c.getDate() + 1); return c; })}
             >
               <ChevronRight className="w-4 h-4" />
             </Button>
@@ -264,7 +294,65 @@ export default function TurnosPage() {
         </Card>
       </div>
 
-      {/* Agenda */}
+      {/* Agenda semana */}
+      {vista === "semana" && (
+        <Card className="flex-1 border-border/50 bg-card overflow-hidden">
+          <div className="overflow-auto h-full">
+            <table className="w-full text-xs border-collapse min-w-[600px]">
+              <thead className="sticky top-0 z-10 bg-card">
+                <tr>
+                  <th className="w-16 border-b border-r border-border/50 p-2 text-left text-muted-foreground font-medium">Hora</th>
+                  {semana.map((dia) => {
+                    const esHoy = dia.toISOString().split('T')[0] === new Date().toISOString().split('T')[0];
+                    return (
+                      <th key={dia.toISOString()} className={`border-b border-r border-border/50 p-2 text-center min-w-[100px] ${esHoy ? "bg-primary/5" : ""}`}>
+                        <p className={`text-[10px] font-normal capitalize text-muted-foreground`}>
+                          {dia.toLocaleDateString("es-AR", { weekday: "short" })}
+                        </p>
+                        <p className={`text-sm font-bold ${esHoy ? "text-primary" : "text-foreground"}`}>
+                          {dia.getDate()}
+                        </p>
+                      </th>
+                    );
+                  })}
+                </tr>
+              </thead>
+              <tbody>
+                {horas.map((hora) => (
+                  <tr key={hora}>
+                    <td className="border-b border-r border-border/30 p-2 text-muted-foreground font-mono w-16 align-top pt-2.5">{hora}</td>
+                    {semana.map((dia) => {
+                      const fechaDia = dia.toISOString().split('T')[0];
+                      const turnosCelda = turnosSemana.filter(t => {
+                        const tf = new Date(t.fechaInicio);
+                        const diaT = tf.toISOString().split('T')[0];
+                        const horaT = tf.toLocaleTimeString("es-AR", { hour: "2-digit", minute: "2-digit", hour12: false });
+                        return diaT === fechaDia && horaT === hora;
+                      });
+                      return (
+                        <td key={dia.toISOString()} className="border-b border-r border-border/30 p-1 align-top h-12 relative">
+                          {turnosCelda.map((t) => (
+                            <div
+                              key={t.id}
+                              onClick={() => openEditarTurno(t)}
+                              className={`rounded px-1.5 py-1 cursor-pointer hover:opacity-80 transition-opacity mb-0.5 ${estadoConfig[t.estado]?.cell || estadoConfig.pendiente.cell}`}
+                            >
+                              <p className="font-semibold text-[10px] truncate">{t.cliente?.nombre}</p>
+                            </div>
+                          ))}
+                        </td>
+                      );
+                    })}
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </Card>
+      )}
+
+      {/* Agenda día */}
+      {vista === "dia" && (
       <Card className="flex-1 border-border/50 bg-card overflow-hidden">
         <div className="overflow-auto h-full">
           <table className="w-full text-xs border-collapse min-w-[500px]">
@@ -309,6 +397,7 @@ export default function TurnosPage() {
                       >
                         {turno ? (
                           <div
+                            onClick={() => openEditarTurno(turno)}
                             className={`h-full rounded-md px-2 py-1.5 cursor-pointer hover:opacity-80 transition-opacity ${estadoConfig[turno.estado]?.cell || estadoConfig.pendiente.cell}`}
                           >
                             <p className="font-semibold text-[11px] leading-tight truncate">
@@ -335,6 +424,7 @@ export default function TurnosPage() {
           </table>
         </div>
       </Card>
+      )}
 
       {/* Leyenda */}
       <div className="flex items-center gap-4 flex-wrap">
@@ -350,14 +440,14 @@ export default function TurnosPage() {
       <NuevoTurnoModal
         open={modalNuevoTurnoOpen}
         onOpenChange={setModalNuevoTurnoOpen}
-        onTurnoCreado={() => {
-          // Refresh turnos
-          if (token && user?.negocio?.id) {
-            getTurnos(token, {
-              fechaInicio: fecha.toISOString().split('T')[0],
-            }).then(setTurnos);
-          }
-        }}
+        onTurnoCreado={refreshTurnos}
+      />
+
+      <EditarTurnoModal
+        open={modalEditarOpen}
+        onClose={() => setModalEditarOpen(false)}
+        onSuccess={() => { setModalEditarOpen(false); refreshTurnos(); }}
+        turno={turnoSeleccionado}
       />
     </div>
   );

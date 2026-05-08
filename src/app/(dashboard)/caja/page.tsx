@@ -1,19 +1,10 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import {
-  DollarSign,
-  CreditCard,
-  Smartphone,
-  ArrowUpRight,
-  ArrowDownLeft,
-  Plus,
-  Lock,
-  Unlock,
-  Receipt,
-  Wallet,
-  TrendingUp,
-  Loader2,
+  DollarSign, CreditCard, Smartphone, ArrowUpRight, ArrowDownLeft, Plus,
+  Lock, Unlock, Receipt, Wallet, TrendingUp, Loader2, RefreshCw, Package,
+  Scissors,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -22,105 +13,79 @@ import { Separator } from "@/components/ui/separator";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { CobrarTurnoModal } from "@/components/modals/CobrarTurnoModal";
 import { NuevoMovimientoModal } from "@/components/modals/NuevoMovimientoModal";
+import { CerrarCajaModal } from "@/components/modals/CerrarCajaModal";
+import { AbrirCajaModal } from "@/components/modals/AbrirCajaModal";
 import { useAuth } from "@/contexts/AuthContext";
-import { getVentas, getCajas, getMovimientosCaja } from "@/lib/api";
+import { getCajaActual } from "@/lib/api";
+import type { Venta, MovimientoCaja } from "@/lib/api";
 
-const medioIcono: Record<string, { icon: any; label: string; color: string }> = {
+type CajaData = Awaited<ReturnType<typeof getCajaActual>>;
+
+const medioIcono: Record<string, { icon: React.ElementType; label: string; color: string }> = {
   efectivo: { icon: DollarSign, label: "Efectivo", color: "text-emerald-400" },
+  tarjeta_debito: { icon: CreditCard, label: "Débito", color: "text-blue-400" },
+  tarjeta_credito: { icon: CreditCard, label: "Crédito", color: "text-indigo-400" },
   tarjeta: { icon: CreditCard, label: "Tarjeta", color: "text-blue-400" },
-  qr: { icon: Smartphone, label: "QR", color: "text-violet-400" },
+  qr: { icon: Smartphone, label: "QR/MP", color: "text-violet-400" },
   transferencia: { icon: ArrowUpRight, label: "Transferencia", color: "text-amber-400" },
 };
 
+function fmtHora(iso: string) {
+  return new Date(iso).toLocaleTimeString("es-AR", { hour: "2-digit", minute: "2-digit" });
+}
+
 export default function CajaPage() {
-  const { user, token } = useAuth();
+  const { token } = useAuth();
+  const [caja, setCaja] = useState<CajaData | null>(null);
   const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
-
   const [tab, setTab] = useState("movimientos");
-  const [modalCobrarOpen, setModalCobrarOpen] = useState(false);
-  const [modalMovimientoOpen, setModalMovimientoOpen] = useState(false);
-  const [_modalMovimientoTipo, setModalMovimientoTipo] = useState<"ingreso" | "egreso">("ingreso");
 
-  const [_ventas, setVentas] = useState<any[]>([]);
-  const [cajas, setCajas] = useState<any[]>([]);
-  const [movimientos, setMovimientos] = useState<any[]>([]);
+  const [cobrarOpen, setCobrarOpen] = useState(false);
+  const [movimientoOpen, setMovimientoOpen] = useState(false);
+  const [movimientoTipo, setMovimientoTipo] = useState<"ingreso" | "egreso">("ingreso");
+  const [cerrarOpen, setCerrarOpen] = useState(false);
+  const [abrirOpen, setAbrirOpen] = useState(false);
 
-  useEffect(() => {
-    if (!token || !user?.negocio?.id) return;
+  const fetchCaja = useCallback(async () => {
+    if (!token) return;
+    try {
+      setLoading(true);
+      const data = await getCajaActual(token);
+      setCaja(data);
+    } catch {
+      setCaja(null);
+    } finally {
+      setLoading(false);
+    }
+  }, [token]);
 
-    const fetchData = async () => {
-      try {
-        setLoading(true);
-        const [ventasData, cajasData] = await Promise.all([
-          getVentas(token).catch(() => []),
-          getCajas(token).catch(() => []),
-        ]);
+  useEffect(() => { fetchCaja(); }, [fetchCaja]);
 
-        // Filter for today's sales and open caja
-        const today = new Date().toISOString().split('T')[0];
-        const ventasHoy = ventasData.filter((v) =>
-          v.createdAt?.startsWith(today)
-        );
-        const cajaAbierta = cajasData.find((c) => c.estado === "abierta");
+  const resumen = (caja?.resumen as { totalVentas: number; totalIngresos: number; totalEgresos: number; saldoActual: number }) ?? null;
+  const ventas: Venta[] = (caja?.ventas ?? []) as Venta[];
+  const movimientos: MovimientoCaja[] = (caja?.movimientos ?? []) as MovimientoCaja[];
+  const cajaAbierta = caja?.estado === "abierta";
 
-        setVentas(ventasHoy);
-        setCajas(cajasData);
+  const ingresosMov = movimientos.filter((m) => m.tipo === "ingreso").reduce((a, m) => a + m.monto, 0);
+  const egresosMov = movimientos.filter((m) => m.tipo === "egreso").reduce((a, m) => a + m.monto, 0);
+  const totalVentas = resumen?.totalVentas ?? ventas.reduce((a, v) => a + v.total, 0);
+  const saldo = resumen?.saldoActual ?? (caja?.montoInicial ?? 0) + totalVentas + ingresosMov - egresosMov;
 
-        // Fetch movements for open caja
-        if (cajaAbierta) {
-          try {
-            const movsData = await getMovimientosCaja(token);
-            setMovimientos(movsData.filter((m) => m.cajaId === cajaAbierta.id));
-          } catch (e) {
-            console.error("Error loading movimientos:", e);
-          }
-        }
-      } catch (err: any) {
-        setError(err.message || "Error al cargar datos de caja");
-        console.error("Error loading caja:", err);
-      } finally {
-        setLoading(false);
-      }
-    };
-
-    fetchData();
-  }, [token, user?.negocio?.id]);
-
-  const cajaAbierta = cajas.find((c) => c.estado === "abierta");
-
-  // Calculate metrics
-  const ingresos = movimientos
-    .filter((m) => m.tipo === "ingreso")
-    .reduce((a, b) => a + (b.monto || 0), 0);
-  const egresos = movimientos
-    .filter((m) => m.tipo === "egreso")
-    .reduce((a, b) => a + (b.monto || 0), 0);
-  const montoInicial = cajaAbierta?.montoInicial || 0;
-  const saldo = ingresos - egresos + montoInicial;
-
+  // Desglose por medio de pago (from ventas)
   const porMedio = Object.entries(
-    movimientos
-      .filter((m) => m.tipo === "ingreso")
-      .reduce((acc, m) => {
-        const medio = m.medioPago || "efectivo";
-        acc[medio] = (acc[medio] || 0) + (m.monto || 0);
-        return acc;
-      }, {} as Record<string, number>)
+    ventas.reduce((acc, v) => {
+      v.pagos?.forEach((p) => {
+        const m = p.medioPago ?? "efectivo";
+        acc[m] = (acc[m] ?? 0) + p.monto;
+      });
+      return acc;
+    }, {} as Record<string, number>)
   );
 
   if (loading) {
     return (
       <div className="flex items-center justify-center h-96">
-        <Loader2 className="w-8 h-8 animate-spin text-primary" />
-      </div>
-    );
-  }
-
-  if (error) {
-    return (
-      <div className="text-center text-destructive py-12">
-        {error}
+        <Loader2 className="w-6 h-6 animate-spin text-primary" />
       </div>
     );
   }
@@ -130,42 +95,25 @@ export default function CajaPage() {
       {/* Header */}
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div className="flex items-center gap-3">
-          <Badge
-            className={`px-3 py-1.5 text-xs font-semibold ${
-              cajaAbierta
-                ? "bg-emerald-500/15 text-emerald-400 border-emerald-500/30"
-                : "bg-red-500/15 text-red-400 border-red-500/30"
-            }`}
-          >
-            <span
-              className={`w-1.5 h-1.5 rounded-full inline-block mr-1.5 ${
-                cajaAbierta ? "bg-emerald-400 animate-pulse" : "bg-red-400"
-              }`}
-            />
+          <Badge className={`px-3 py-1.5 text-xs font-semibold ${cajaAbierta ? "bg-emerald-500/15 text-emerald-400 border-emerald-500/30" : "bg-red-500/15 text-red-400 border-red-500/30"}`}>
+            <span className={`w-1.5 h-1.5 rounded-full inline-block mr-1.5 ${cajaAbierta ? "bg-emerald-400 animate-pulse" : "bg-red-400"}`} />
             {cajaAbierta ? "Caja abierta" : "Caja cerrada"}
           </Badge>
-          {cajaAbierta && (
+          {cajaAbierta && caja?.abiertaAt && (
             <span className="text-xs text-muted-foreground">
-              Apertura: ${montoInicial.toLocaleString("es-AR")} ·{" "}
-              {cajaAbierta.fechaApertura
-                ? new Date(cajaAbierta.fechaApertura).toLocaleTimeString("es-AR", {
-                    hour: "2-digit",
-                    minute: "2-digit",
-                  })
-                : "--:--"}{" "}
-              hs
+              Apertura: ${(caja.montoInicial).toLocaleString("es-AR")} · {fmtHora(caja.abiertaAt)} hs
             </span>
           )}
         </div>
         <div className="flex items-center gap-2">
+          <Button variant="ghost" size="icon" className="w-8 h-8" onClick={fetchCaja} title="Actualizar">
+            <RefreshCw className="w-3.5 h-3.5" />
+          </Button>
           <Button
             variant="outline"
             size="sm"
             className="h-8 text-xs border-border/50"
-            onClick={() => {
-              setModalMovimientoTipo("ingreso");
-              setModalMovimientoOpen(true);
-            }}
+            onClick={() => { setMovimientoTipo("ingreso"); setMovimientoOpen(true); }}
             disabled={!cajaAbierta}
           >
             <Plus className="w-3.5 h-3.5 mr-1.5" />
@@ -175,6 +123,7 @@ export default function CajaPage() {
             <Button
               size="sm"
               className="h-8 text-xs font-semibold bg-red-500/15 text-red-400 border border-red-500/30 hover:bg-red-500/25"
+              onClick={() => setCerrarOpen(true)}
             >
               <Lock className="w-3.5 h-3.5 mr-1.5" />
               Cerrar caja
@@ -183,6 +132,7 @@ export default function CajaPage() {
             <Button
               size="sm"
               className="h-8 veylo-gradient text-white border-0 hover:opacity-90 text-xs font-semibold"
+              onClick={() => setAbrirOpen(true)}
             >
               <Unlock className="w-3.5 h-3.5 mr-1.5" />
               Abrir caja
@@ -191,198 +141,148 @@ export default function CajaPage() {
         </div>
       </div>
 
-      {/* KPIs caja */}
+      {/* KPIs */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
-        <Card className="border-border/50 bg-card">
-          <CardContent className="p-4 flex items-center gap-3">
-            <div className="w-9 h-9 rounded-xl bg-muted/50 flex items-center justify-center">
-              <Wallet className="w-4 h-4 text-foreground" />
-            </div>
-            <div>
-              <p className="text-lg font-bold text-foreground">
-                ${saldo.toLocaleString("es-AR")}
-              </p>
-              <p className="text-[11px] text-muted-foreground">Saldo actual</p>
-            </div>
-          </CardContent>
-        </Card>
-        <Card className="border-border/50 bg-card">
-          <CardContent className="p-4 flex items-center gap-3">
-            <div className="w-9 h-9 rounded-xl bg-emerald-500/10 flex items-center justify-center">
-              <ArrowUpRight className="w-4 h-4 text-emerald-400" />
-            </div>
-            <div>
-              <p className="text-lg font-bold text-emerald-400">
-                ${ingresos.toLocaleString("es-AR")}
-              </p>
-              <p className="text-[11px] text-muted-foreground">Ingresos</p>
-            </div>
-          </CardContent>
-        </Card>
-        <Card className="border-border/50 bg-card">
-          <CardContent className="p-4 flex items-center gap-3">
-            <div className="w-9 h-9 rounded-xl bg-red-500/10 flex items-center justify-center">
-              <ArrowDownLeft className="w-4 h-4 text-red-400" />
-            </div>
-            <div>
-              <p className="text-lg font-bold text-red-400">
-                ${egresos.toLocaleString("es-AR")}
-              </p>
-              <p className="text-[11px] text-muted-foreground">Egresos</p>
-            </div>
-          </CardContent>
-        </Card>
-        <Card className="border-border/50 bg-card">
-          <CardContent className="p-4 flex items-center gap-3">
-            <div className="w-9 h-9 rounded-xl bg-violet-500/10 flex items-center justify-center">
-              <TrendingUp className="w-4 h-4 text-violet-400" />
-            </div>
-            <div>
-              <p className="text-lg font-bold text-violet-400">
-                ${(ingresos - egresos).toLocaleString("es-AR")}
-              </p>
-              <p className="text-[11px] text-muted-foreground">Resultado</p>
-            </div>
-          </CardContent>
-        </Card>
+        {[
+          { label: "Saldo actual", value: `$${saldo.toLocaleString("es-AR")}`, icon: Wallet, color: "text-foreground", bg: "bg-muted/50" },
+          { label: "Ventas del día", value: `$${totalVentas.toLocaleString("es-AR")}`, icon: ArrowUpRight, color: "text-emerald-400", bg: "bg-emerald-500/10" },
+          { label: "Egresos", value: `$${egresosMov.toLocaleString("es-AR")}`, icon: ArrowDownLeft, color: "text-red-400", bg: "bg-red-500/10" },
+          { label: "Resultado neto", value: `$${(totalVentas + ingresosMov - egresosMov).toLocaleString("es-AR")}`, icon: TrendingUp, color: "text-violet-400", bg: "bg-violet-500/10" },
+        ].map((k) => (
+          <Card key={k.label} className="border-border/50 bg-card">
+            <CardContent className="p-4 flex items-center gap-3">
+              <div className={`w-9 h-9 rounded-xl ${k.bg} flex items-center justify-center shrink-0`}>
+                <k.icon className={`w-4 h-4 ${k.color}`} />
+              </div>
+              <div>
+                <p className={`text-lg font-bold ${k.color}`}>{k.value}</p>
+                <p className="text-[11px] text-muted-foreground">{k.label}</p>
+              </div>
+            </CardContent>
+          </Card>
+        ))}
       </div>
 
       <div className="grid grid-cols-1 xl:grid-cols-3 gap-4">
-        {/* Movimientos */}
+        {/* Main panel */}
         <Card className="xl:col-span-2 border-border/50 bg-card">
           <CardHeader className="pb-3 px-5 pt-5">
             <div className="flex items-center justify-between">
-              <CardTitle className="text-sm font-semibold">Movimientos del día</CardTitle>
+              <CardTitle className="text-sm font-semibold">Actividad del día</CardTitle>
               <Tabs value={tab} onValueChange={setTab}>
                 <TabsList className="h-7">
-                  <TabsTrigger value="movimientos" className="text-[11px] px-2.5">
-                    Todos
-                  </TabsTrigger>
-                  <TabsTrigger value="ingresos" className="text-[11px] px-2.5">
-                    Ingresos
-                  </TabsTrigger>
-                  <TabsTrigger value="egresos" className="text-[11px] px-2.5">
-                    Egresos
-                  </TabsTrigger>
+                  <TabsTrigger value="ventas" className="text-[11px] px-2.5">Ventas ({ventas.length})</TabsTrigger>
+                  <TabsTrigger value="movimientos" className="text-[11px] px-2.5">Movimientos</TabsTrigger>
                 </TabsList>
               </Tabs>
             </div>
           </CardHeader>
           <CardContent className="px-5 pb-5 space-y-1">
-            {movimientos
-              .filter((m) => {
-                if (tab === "ingresos") return m.tipo === "ingreso";
-                if (tab === "egresos") return m.tipo === "egreso";
-                return true;
-              })
-              .length === 0 ? (
-              <p className="text-sm text-muted-foreground py-8 text-center">
-                {cajaAbierta
-                  ? "No hay movimientos registrados hoy"
-                  : "Abre la caja para registrar movimientos"}
-              </p>
-            ) : (
-              movimientos
-                .filter((m) => {
-                  if (tab === "ingresos") return m.tipo === "ingreso";
-                  if (tab === "egresos") return m.tipo === "egreso";
-                  return true;
-                })
-                .map((mov, i, arr) => {
-                  const medioKey = mov.medioPago || "efectivo";
-                  const medio = medioIcono[medioKey] || medioIcono.efectivo;
-                  const hora = mov.createdAt
-                    ? new Date(mov.createdAt).toLocaleTimeString("es-AR", {
-                        hour: "2-digit",
-                        minute: "2-digit",
-                      })
-                    : "--:--";
-
+            {tab === "ventas" && (
+              ventas.length === 0 ? (
+                <p className="text-sm text-muted-foreground py-8 text-center">Sin ventas registradas hoy</p>
+              ) : (
+                ventas.map((v, i) => {
+                  const medioKey = v.pagos?.[0]?.medioPago ?? "efectivo";
+                  const medio = medioIcono[medioKey] ?? medioIcono.efectivo;
+                  const hora = fmtHora(v.createdAt);
+                  const desc = v.items?.[0]?.descripcion ?? "Venta";
+                  const MIcon = medio.icon;
                   return (
-                    <div key={mov.id}>
+                    <div key={v.id}>
                       <div className="flex items-center gap-3 py-2.5">
-                        {/* Tipo */}
-                        <div
-                          className={`w-7 h-7 rounded-lg flex items-center justify-center shrink-0 ${
-                            mov.tipo === "ingreso"
-                              ? "bg-emerald-500/15"
-                              : "bg-red-500/15"
-                          }`}
-                        >
-                          {mov.tipo === "ingreso" ? (
-                            <ArrowUpRight className="w-3.5 h-3.5 text-emerald-400" />
-                          ) : (
-                            <ArrowDownLeft className="w-3.5 h-3.5 text-red-400" />
-                          )}
+                        <div className={`w-7 h-7 rounded-lg flex items-center justify-center shrink-0 ${v.tipo === "servicio" ? "bg-primary/10" : v.tipo === "producto" ? "bg-amber-500/10" : "bg-violet-500/10"}`}>
+                          {v.tipo === "servicio" ? <Scissors className="w-3.5 h-3.5 text-primary" /> : <Package className="w-3.5 h-3.5 text-amber-400" />}
                         </div>
-
-                        {/* Info */}
                         <div className="flex-1 min-w-0">
                           <p className="text-xs font-medium text-foreground truncate">
-                            {mov.descripcion || mov.concepto || "Sin descripción"}
+                            {v.items?.map((i) => i.descripcion).join(" + ") || desc}
                           </p>
                           <div className="flex items-center gap-2 mt-0.5">
                             <span className="text-[10px] text-muted-foreground">{hora}</span>
                             <span className="text-[10px] text-muted-foreground">·</span>
-                            <medio.icon className={`w-3 h-3 ${medio.color}`} />
+                            <MIcon className={`w-3 h-3 ${medio.color}`} />
                             <span className={`text-[10px] ${medio.color}`}>{medio.label}</span>
+                            {v.descuento > 0 && (
+                              <Badge className="text-[9px] px-1 py-0 bg-emerald-500/10 text-emerald-400 border-0">
+                                -{v.descuento.toLocaleString("es-AR")}
+                              </Badge>
+                            )}
                           </div>
                         </div>
-
-                        {/* Monto */}
-                        <span
-                          className={`text-sm font-bold shrink-0 ${
-                            mov.tipo === "ingreso" ? "text-emerald-400" : "text-red-400"
-                          }`}
-                        >
-                          {mov.tipo === "ingreso" ? "+" : "-"}$
-                          {(mov.monto || 0).toLocaleString("es-AR")}
-                        </span>
+                        <span className="text-sm font-bold text-emerald-400 shrink-0">+${v.total.toLocaleString("es-AR")}</span>
                       </div>
-                      {i < arr.length - 1 && <Separator className="opacity-30" />}
+                      {i < ventas.length - 1 && <Separator className="opacity-30" />}
                     </div>
                   );
                 })
+              )
+            )}
+
+            {tab === "movimientos" && (
+              movimientos.length === 0 ? (
+                <p className="text-sm text-muted-foreground py-8 text-center">
+                  {cajaAbierta ? "Sin movimientos manuales hoy" : "Abrí la caja para registrar movimientos"}
+                </p>
+              ) : (
+                movimientos.map((mov, i) => {
+                  const medioKey = mov.medioPago ?? "efectivo";
+                  const medio = medioIcono[medioKey] ?? medioIcono.efectivo;
+                  const MIcon = medio.icon;
+                  return (
+                    <div key={mov.id}>
+                      <div className="flex items-center gap-3 py-2.5">
+                        <div className={`w-7 h-7 rounded-lg flex items-center justify-center shrink-0 ${mov.tipo === "ingreso" ? "bg-emerald-500/15" : "bg-red-500/15"}`}>
+                          {mov.tipo === "ingreso" ? <ArrowUpRight className="w-3.5 h-3.5 text-emerald-400" /> : <ArrowDownLeft className="w-3.5 h-3.5 text-red-400" />}
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          <p className="text-xs font-medium text-foreground truncate">{mov.concepto}</p>
+                          <div className="flex items-center gap-2 mt-0.5">
+                            <span className="text-[10px] text-muted-foreground">{fmtHora(mov.createdAt)}</span>
+                            <span className="text-[10px] text-muted-foreground">·</span>
+                            <MIcon className={`w-3 h-3 ${medio.color}`} />
+                            <span className={`text-[10px] ${medio.color}`}>{medio.label}</span>
+                          </div>
+                        </div>
+                        <span className={`text-sm font-bold shrink-0 ${mov.tipo === "ingreso" ? "text-emerald-400" : "text-red-400"}`}>
+                          {mov.tipo === "ingreso" ? "+" : "-"}${mov.monto.toLocaleString("es-AR")}
+                        </span>
+                      </div>
+                      {i < movimientos.length - 1 && <Separator className="opacity-30" />}
+                    </div>
+                  );
+                })
+              )
             )}
           </CardContent>
         </Card>
 
-        {/* Panel derecho */}
+        {/* Right panel */}
         <div className="space-y-4">
-          {/* Desglose por medio de pago */}
+          {/* Por medio de pago */}
           <Card className="border-border/50 bg-card">
             <CardHeader className="pb-3 px-5 pt-5">
               <CardTitle className="text-sm font-semibold">Por medio de pago</CardTitle>
             </CardHeader>
             <CardContent className="px-5 pb-5 space-y-3">
               {porMedio.length === 0 ? (
-                <p className="text-sm text-muted-foreground py-4 text-center">
-                  Sin ingresos registrados
-                </p>
+                <p className="text-sm text-muted-foreground py-3 text-center">Sin ventas registradas</p>
               ) : (
-                porMedio.map(([medio, monto], i) => {
-                  const m = medioIcono[medio] || medioIcono.efectivo;
-                  const montoNum = monto as number;
-                  const pct = Math.round((montoNum / ingresos) * 100);
+                porMedio.map(([medio, montoRaw], i) => {
+                  const m = medioIcono[medio] ?? medioIcono.efectivo;
+                  const monto = montoRaw as number;
+                  const pct = totalVentas > 0 ? Math.round((monto / totalVentas) * 100) : 0;
+                  const MIcon = m.icon;
                   return (
                     <div key={medio}>
-                      <div className="flex items-center gap-2.5 mb-1.5">
-                        <m.icon className={`w-3.5 h-3.5 ${m.color}`} />
-                        <span className="text-xs font-medium text-foreground flex-1">
-                          {m.label}
-                        </span>
-                        <span className="text-xs font-bold text-foreground">
-                          ${montoNum.toLocaleString("es-AR")}
-                        </span>
-                        <span className="text-[10px] text-muted-foreground w-8 text-right">
-                          {pct}%
-                        </span>
+                      <div className="flex items-center gap-2 mb-1.5">
+                        <MIcon className={`w-3.5 h-3.5 ${m.color}`} />
+                        <span className="text-xs font-medium text-foreground flex-1">{m.label}</span>
+                        <span className="text-xs font-bold text-foreground">${monto.toLocaleString("es-AR")}</span>
+                        <span className="text-[10px] text-muted-foreground w-7 text-right">{pct}%</span>
                       </div>
                       <div className="w-full bg-muted/40 rounded-full h-1.5">
-                        <div
-                          className="h-1.5 rounded-full veylo-gradient transition-all"
-                          style={{ width: `${pct}%` }}
-                        />
+                        <div className="h-1.5 rounded-full veylo-gradient transition-all" style={{ width: `${pct}%` }} />
                       </div>
                       {i < porMedio.length - 1 && <Separator className="mt-3 opacity-30" />}
                     </div>
@@ -402,20 +302,17 @@ export default function CajaPage() {
                 variant="outline"
                 size="sm"
                 className="w-full text-xs h-9 border-border/50 justify-start gap-2"
-                onClick={() => setModalCobrarOpen(true)}
+                onClick={() => setCobrarOpen(true)}
                 disabled={!cajaAbierta}
               >
-                <Receipt className="w-3.5 h-3.5 text-muted-foreground" />
-                Cobrar turno
+                <Receipt className="w-3.5 h-3.5 text-primary" />
+                Cobrar turno / Venta
               </Button>
               <Button
                 variant="outline"
                 size="sm"
                 className="w-full text-xs h-9 border-border/50 justify-start gap-2"
-                onClick={() => {
-                  setModalMovimientoTipo("egreso");
-                  setModalMovimientoOpen(true);
-                }}
+                onClick={() => { setMovimientoTipo("egreso"); setMovimientoOpen(true); }}
                 disabled={!cajaAbierta}
               >
                 <ArrowDownLeft className="w-3.5 h-3.5 text-red-400" />
@@ -425,38 +322,64 @@ export default function CajaPage() {
                 variant="outline"
                 size="sm"
                 className="w-full text-xs h-9 border-border/50 justify-start gap-2"
-                onClick={() => {
-                  setModalMovimientoTipo("ingreso");
-                  setModalMovimientoOpen(true);
-                }}
+                onClick={() => { setMovimientoTipo("ingreso"); setMovimientoOpen(true); }}
                 disabled={!cajaAbierta}
               >
                 <ArrowUpRight className="w-3.5 h-3.5 text-emerald-400" />
                 Ingreso manual
               </Button>
               <Separator className="opacity-30" />
-              <Button
-                variant="outline"
-                size="sm"
-                className="w-full text-xs h-9 border-border/50 justify-start gap-2"
-                disabled={!cajaAbierta}
-              >
-                <Receipt className="w-3.5 h-3.5 text-muted-foreground" />
-                Exportar resumen del día
-              </Button>
+              {!cajaAbierta && (
+                <Button
+                  size="sm"
+                  className="w-full text-xs h-9 veylo-gradient text-white border-0 hover:opacity-90 font-semibold justify-start gap-2"
+                  onClick={() => setAbrirOpen(true)}
+                >
+                  <Unlock className="w-3.5 h-3.5" />
+                  Abrir caja del día
+                </Button>
+              )}
+              {cajaAbierta && (
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="w-full text-xs h-9 border-border/50 justify-start gap-2"
+                  onClick={() => setCerrarOpen(true)}
+                >
+                  <Lock className="w-3.5 h-3.5 text-muted-foreground" />
+                  Cerrar y arquear caja
+                </Button>
+              )}
             </CardContent>
           </Card>
         </div>
       </div>
 
+      {/* Modals */}
       <CobrarTurnoModal
-        open={modalCobrarOpen}
-        onOpenChange={setModalCobrarOpen}
+        open={cobrarOpen}
+        onOpenChange={setCobrarOpen}
+        onSuccess={fetchCaja}
       />
       <NuevoMovimientoModal
-        open={modalMovimientoOpen}
-        onOpenChange={setModalMovimientoOpen}
+        open={movimientoOpen}
+        onOpenChange={setMovimientoOpen}
+        onSuccess={fetchCaja}
       />
+      <AbrirCajaModal
+        open={abrirOpen}
+        onClose={() => setAbrirOpen(false)}
+        onSuccess={() => { setAbrirOpen(false); fetchCaja(); }}
+      />
+      {caja && cajaAbierta && (
+        <CerrarCajaModal
+          open={cerrarOpen}
+          onClose={() => setCerrarOpen(false)}
+          onSuccess={() => { setCerrarOpen(false); fetchCaja(); }}
+          cajaId={caja.id}
+          saldoCalculado={saldo}
+        />
+      )}
     </div>
   );
 }

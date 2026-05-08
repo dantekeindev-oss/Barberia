@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useParams } from "next/navigation";
 import {
   ArrowLeft,
@@ -13,10 +13,10 @@ import {
   Edit,
   Clock,
   CheckCircle2,
-  XCircle,
   Calendar as CalendarIcon,
   User,
   TrendingUp,
+  Loader2,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -25,80 +25,29 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Separator } from "@/components/ui/separator";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { NuevoTurnoModal } from "@/components/modals/NuevoTurnoModal";
+import { useAuth } from "@/contexts/AuthContext";
+import { getCliente } from "@/lib/api";
+import type { Cliente } from "@/lib/api";
 
-const clienteData = {
-  nombre: "Carlos Ramírez",
-  initials: "CR",
-  telefono: "11-4523-1234",
-  email: "carlos@gmail.com",
-  fechaNacimiento: "12/05/1990",
-  fechaRegistro: "15/02/2025",
-  segmento: "frecuente",
-  puntos: 340,
-  visitas: 18,
-  ticketPromedio: 3100,
-  ultimaVisita: "03/04/2026",
-  barberoHabitual: "Javier",
-  preferencias: "Corte bajo con fade. Rata al costado izquierda. No le gusta hablar mucho durante el servicio.",
-  observaciones: "Cliente VIP. Buen pagador. Prefiere citas matutinas.",
-};
+interface TurnoCliente {
+  id: string;
+  fechaInicio: string;
+  estado: string;
+  empleado: { nombre: string; apellido?: string };
+  servicios: Array<{
+    servicio: { nombre: string };
+    precioAplicado: number;
+    duracionAplicada: number;
+  }>;
+}
 
-const historial = [
-  {
-    id: 1,
-    fecha: "03/04/2026",
-    hora: "10:30",
-    barbero: "Javier",
-    servicio: "Corte + Barba",
-    duracion: "50 min",
-    precio: 3500,
-    estado: "finalizado",
-  },
-  {
-    id: 2,
-    fecha: "18/03/2026",
-    hora: "11:00",
-    barbero: "Javier",
-    servicio: "Corte degradé",
-    duracion: "30 min",
-    precio: 2800,
-    estado: "finalizado",
-  },
-  {
-    id: 3,
-    fecha: "05/03/2026",
-    hora: "09:30",
-    barbero: "Lucas",
-    servicio: "Corte + Barba",
-    duracion: "50 min",
-    precio: 3500,
-    estado: "finalizado",
-  },
-  {
-    id: 4,
-    fecha: "15/02/2026",
-    hora: "10:00",
-    barbero: "Javier",
-    servicio: "Corte clásico",
-    duracion: "25 min",
-    precio: 2200,
-    estado: "finalizado",
-  },
-  {
-    id: 5,
-    fecha: "28/01/2026",
-    hora: "14:30",
-    barbero: "Nicolás",
-    servicio: "Arreglo de barba",
-    duracion: "20 min",
-    precio: 1500,
-    estado: "ausente",
-  },
-];
-
-const proximos = [
-  { id: 1, fecha: "17/04/2026", hora: "10:30", barbero: "Javier", servicios: ["Corte + Barba"], estado: "confirmado" },
-];
+interface MovimientoPuntos {
+  id: string;
+  tipo: "acumulacion" | "canje";
+  puntos: number;
+  descripcion: string;
+  createdAt: string;
+}
 
 const estadoConfig: Record<string, { label: string; className: string }> = {
   confirmado: { label: "Confirmado", className: "bg-emerald-500/15 text-emerald-400 border-emerald-500/30" },
@@ -109,16 +58,82 @@ const estadoConfig: Record<string, { label: string; className: string }> = {
   ausente: { label: "Ausente", className: "bg-rose-500/15 text-rose-400 border-rose-500/30" },
 };
 
+const segmentoConfig: Record<string, { label: string; className: string }> = {
+  frecuente: { label: "Frecuente", className: "bg-violet-500/15 text-violet-400 border-violet-500/30" },
+  nuevo: { label: "Nuevo", className: "bg-emerald-500/15 text-emerald-400 border-emerald-500/30" },
+  inactivo: { label: "Inactivo", className: "bg-muted/30 text-muted-foreground border-border" },
+};
+
+function fmtFecha(iso: string): string {
+  const d = new Date(iso);
+  return d.toLocaleDateString("es-AR", { day: "2-digit", month: "2-digit", year: "numeric" });
+}
+
+function fmtHora(iso: string): string {
+  return new Date(iso).toLocaleTimeString("es-AR", { hour: "2-digit", minute: "2-digit" });
+}
+
 export default function ClienteFichaPage() {
   const params = useParams();
+  const { token } = useAuth();
   const [tab, setTab] = useState("historial");
   const [modalNuevoTurnoOpen, setModalNuevoTurnoOpen] = useState(false);
+  const [cliente, setCliente] = useState<Cliente | null>(null);
+  const [turnos, setTurnos] = useState<TurnoCliente[]>([]);
+  const [movimientos, setMovimientos] = useState<MovimientoPuntos[]>([]);
+  const [loading, setLoading] = useState(true);
 
-  const totalGastado = historial
-    .filter((h) => h.estado === "finalizado")
-    .reduce((acc, h) => acc + h.precio, 0);
+  useEffect(() => {
+    if (!token || !params.id) return;
+    setLoading(true);
+    getCliente(params.id as string, token)
+      .then((data) => {
+        setCliente(data);
+        setTurnos((data.turnos as TurnoCliente[]).sort(
+          (a, b) => new Date(b.fechaInicio).getTime() - new Date(a.fechaInicio).getTime()
+        ));
+        setMovimientos(
+          (data.movimientosPuntos as MovimientoPuntos[]).sort(
+            (a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
+          )
+        );
+      })
+      .catch(() => {})
+      .finally(() => setLoading(false));
+  }, [token, params.id]);
 
-  const ultimoServicio = historial.find((h) => h.estado === "finalizado");
+  const turnosFinalizados = turnos.filter((t) => t.estado === "finalizado");
+  const totalGastado = turnosFinalizados.reduce((acc, t) => acc + (t.servicios[0]?.precioAplicado ?? 0), 0);
+  const ticketPromedio = turnosFinalizados.length > 0 ? Math.round(totalGastado / turnosFinalizados.length) : 0;
+  const ultimoServicio = turnosFinalizados[0]?.servicios[0]?.servicio.nombre ?? "—";
+  const initials = cliente
+    ? `${cliente.nombre[0]}${cliente.apellido?.[0] ?? ""}`.toUpperCase()
+    : "?";
+
+  const proximos = turnos.filter((t) => {
+    const future = new Date(t.fechaInicio) >= new Date();
+    return future && ["pendiente", "confirmado"].includes(t.estado);
+  });
+
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center py-32">
+        <Loader2 className="w-6 h-6 animate-spin text-muted-foreground" />
+      </div>
+    );
+  }
+
+  if (!cliente) {
+    return (
+      <div className="flex flex-col items-center justify-center py-32 gap-3">
+        <p className="text-sm text-muted-foreground">Cliente no encontrado</p>
+        <Button variant="outline" size="sm" onClick={() => window.location.href = "/clientes"}>
+          <ArrowLeft className="w-4 h-4 mr-1.5" />
+          Volver
+        </Button>
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-4">
@@ -142,83 +157,89 @@ export default function ClienteFichaPage() {
           <div className="flex items-start gap-4">
             <Avatar className="w-16 h-16">
               <AvatarFallback className="text-lg font-bold bg-primary/20 text-primary">
-                {clienteData.initials}
+                {initials}
               </AvatarFallback>
             </Avatar>
             <div className="flex-1 min-w-0">
               <div className="flex items-center gap-2 flex-wrap">
-                <h2 className="text-xl font-bold text-foreground">{clienteData.nombre}</h2>
-                <Badge className="bg-violet-500/15 text-violet-400 border-violet-500/30 text-[10px]">Frecuente</Badge>
+                <h2 className="text-xl font-bold text-foreground">
+                  {cliente.nombre} {cliente.apellido ?? ""}
+                </h2>
+                <Badge className={segmentoConfig[cliente.segmento]?.className ?? ""}>
+                  {segmentoConfig[cliente.segmento]?.label ?? cliente.segmento}
+                </Badge>
               </div>
               <div className="flex flex-wrap items-center gap-4 mt-2 text-sm text-muted-foreground">
                 <div className="flex items-center gap-1.5">
                   <Phone className="w-3.5 h-3.5" />
-                  {clienteData.telefono}
+                  {cliente.telefono}
                 </div>
-                {clienteData.email && (
+                {cliente.email && (
                   <div className="flex items-center gap-1.5">
                     <Mail className="w-3.5 h-3.5" />
-                    {clienteData.email}
+                    {cliente.email}
+                  </div>
+                )}
+                {cliente.fechaNacimiento && (
+                  <div className="flex items-center gap-1.5">
+                    <CalendarDays className="w-3.5 h-3.5" />
+                    {fmtFecha(cliente.fechaNacimiento)}
                   </div>
                 )}
                 <div className="flex items-center gap-1.5">
-                  <CalendarDays className="w-3.5 h-3.5" />
-                  {clienteData.fechaNacimiento}
-                </div>
-                <div className="flex items-center gap-1.5">
                   <Star className="w-3.5 h-3.5 text-amber-400" />
-                  {clienteData.puntos} puntos
+                  {cliente.puntosAcumulados} puntos
                 </div>
               </div>
               <div className="flex items-center gap-4 mt-3 text-xs">
                 <div>
                   <span className="text-muted-foreground">Registrado:</span>
-                  <span className="ml-1 text-foreground">{clienteData.fechaRegistro}</span>
+                  <span className="ml-1 text-foreground">{fmtFecha(cliente.createdAt)}</span>
                 </div>
-                <div>
-                  <span className="text-muted-foreground">Última visita:</span>
-                  <span className="ml-1 text-foreground">{clienteData.ultimaVisita}</span>
-                </div>
-                <div>
-                  <span className="text-muted-foreground">Barbero habitual:</span>
-                  <span className="ml-1 text-foreground">{clienteData.barberoHabitual}</span>
-                </div>
+                {turnosFinalizados[0] && (
+                  <div>
+                    <span className="text-muted-foreground">Última visita:</span>
+                    <span className="ml-1 text-foreground">{fmtFecha(turnosFinalizados[0].fechaInicio)}</span>
+                  </div>
+                )}
               </div>
             </div>
           </div>
 
-          <Separator className="my-4 opacity-30" />
-
-          {/* Preferencias y observaciones */}
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <div>
-              <div className="flex items-center gap-1.5 text-xs font-medium text-muted-foreground mb-2">
-                <Scissors className="w-3.5 h-3.5" />
-                Preferencias de corte
+          {(cliente.preferencias || cliente.observaciones) && (
+            <>
+              <Separator className="my-4 opacity-30" />
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                {cliente.preferencias && (
+                  <div>
+                    <div className="flex items-center gap-1.5 text-xs font-medium text-muted-foreground mb-2">
+                      <Scissors className="w-3.5 h-3.5" />
+                      Preferencias de corte
+                    </div>
+                    <p className="text-sm text-foreground bg-muted/30 p-3 rounded-lg">{cliente.preferencias}</p>
+                  </div>
+                )}
+                {cliente.observaciones && (
+                  <div>
+                    <div className="flex items-center gap-1.5 text-xs font-medium text-muted-foreground mb-2">
+                      <User className="w-3.5 h-3.5" />
+                      Observaciones internas
+                    </div>
+                    <p className="text-sm text-foreground bg-muted/30 p-3 rounded-lg">{cliente.observaciones}</p>
+                  </div>
+                )}
               </div>
-              <p className="text-sm text-foreground bg-muted/30 p-3 rounded-lg">
-                {clienteData.preferencias}
-              </p>
-            </div>
-            <div>
-              <div className="flex items-center gap-1.5 text-xs font-medium text-muted-foreground mb-2">
-                <User className="w-3.5 h-3.5" />
-                Observaciones internas
-              </div>
-              <p className="text-sm text-foreground bg-muted/30 p-3 rounded-lg">
-                {clienteData.observaciones}
-              </p>
-            </div>
-          </div>
+            </>
+          )}
         </CardContent>
       </Card>
 
       {/* Stats */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
         {[
-          { label: "Visitas totales", value: clienteData.visitas, icon: CalendarIcon, color: "text-foreground", bg: "bg-muted/50" },
-          { label: "Último servicio", value: ultimoServicio?.servicio || "—", icon: Scissors, color: "text-blue-400", bg: "bg-blue-500/10" },
-          { label: "Ticket promedio", value: `$${clienteData.ticketPromedio.toLocaleString("es-AR")}`, icon: DollarSign, color: "text-emerald-400", bg: "bg-emerald-500/10" },
+          { label: "Visitas totales", value: cliente._count?.turnos ?? turnosFinalizados.length, icon: CalendarIcon, color: "text-foreground", bg: "bg-muted/50" },
+          { label: "Último servicio", value: ultimoServicio, icon: Scissors, color: "text-blue-400", bg: "bg-blue-500/10" },
+          { label: "Ticket promedio", value: `$${ticketPromedio.toLocaleString("es-AR")}`, icon: DollarSign, color: "text-emerald-400", bg: "bg-emerald-500/10" },
           { label: "Total gastado", value: `$${totalGastado.toLocaleString("es-AR")}`, icon: TrendingUp, color: "text-violet-400", bg: "bg-violet-500/10" },
         ].map((k) => (
           <Card key={k.label} className="border-border/50 bg-card">
@@ -251,14 +272,14 @@ export default function ClienteFichaPage() {
                 </div>
                 <div className="flex-1">
                   <p className="text-sm font-medium text-foreground">
-                    {p.fecha} · {p.hora}
+                    {fmtFecha(p.fechaInicio)} · {fmtHora(p.fechaInicio)}
                   </p>
                   <p className="text-xs text-muted-foreground">
-                    {p.barbero} · {p.servicios.join(" + ")}
+                    {p.empleado.nombre} · {p.servicios.map((s) => s.servicio.nombre).join(" + ")}
                   </p>
                 </div>
-                <Badge className={estadoConfig[p.estado].className}>
-                  {estadoConfig[p.estado].label}
+                <Badge className={estadoConfig[p.estado]?.className ?? ""}>
+                  {estadoConfig[p.estado]?.label ?? p.estado}
                 </Badge>
               </div>
             ))}
@@ -280,37 +301,48 @@ export default function ClienteFichaPage() {
             <CardTitle className="text-sm font-semibold">Historial de visitas</CardTitle>
           </CardHeader>
           <CardContent className="px-5 pb-5">
-            <div className="space-y-1">
-              {historial.map((h, i) => {
-                const estado = estadoConfig[h.estado];
-                return (
-                  <div key={h.id}>
-                    <div className="flex items-center gap-4 py-3">
-                      <div className="flex items-center justify-center w-10 h-10 rounded-lg bg-muted/50">
-                        <CalendarIcon className="w-4 h-4 text-muted-foreground" />
-                      </div>
-                      <div className="flex-1 min-w-0">
-                        <div className="flex items-center gap-2 flex-wrap">
-                          <p className="text-sm font-medium text-foreground">{h.fecha}</p>
-                          <span className="text-xs text-muted-foreground">{h.hora}</span>
+            {turnos.length === 0 ? (
+              <p className="text-xs text-muted-foreground text-center py-6">Sin turnos registrados</p>
+            ) : (
+              <div className="space-y-1">
+                {turnos.map((h, i) => {
+                  const estado = estadoConfig[h.estado] ?? { label: h.estado, className: "bg-muted/30 text-muted-foreground border-border" };
+                  const servicio = h.servicios[0];
+                  return (
+                    <div key={h.id}>
+                      <div className="flex items-center gap-4 py-3">
+                        <div className="flex items-center justify-center w-10 h-10 rounded-lg bg-muted/50">
+                          <CalendarIcon className="w-4 h-4 text-muted-foreground" />
                         </div>
-                        <p className="text-xs text-foreground">{h.servicio}</p>
-                        <div className="flex items-center gap-3 mt-1 text-[10px] text-muted-foreground">
-                          <span>{h.barbero}</span>
-                          <span>·</span>
-                          <span>{h.duracion}</span>
+                        <div className="flex-1 min-w-0">
+                          <div className="flex items-center gap-2 flex-wrap">
+                            <p className="text-sm font-medium text-foreground">{fmtFecha(h.fechaInicio)}</p>
+                            <span className="text-xs text-muted-foreground">{fmtHora(h.fechaInicio)}</span>
+                          </div>
+                          <p className="text-xs text-foreground">{servicio?.servicio.nombre ?? "—"}</p>
+                          <div className="flex items-center gap-3 mt-1 text-[10px] text-muted-foreground">
+                            <span>{h.empleado.nombre}</span>
+                            {servicio && (
+                              <>
+                                <span>·</span>
+                                <span>{servicio.duracionAplicada} min</span>
+                              </>
+                            )}
+                          </div>
+                        </div>
+                        <div className="text-right">
+                          {servicio && (
+                            <p className="text-sm font-bold text-foreground">${servicio.precioAplicado.toLocaleString("es-AR")}</p>
+                          )}
+                          <Badge className={estado.className}>{estado.label}</Badge>
                         </div>
                       </div>
-                      <div className="text-right">
-                        <p className="text-sm font-bold text-foreground">${h.precio.toLocaleString("es-AR")}</p>
-                        <Badge className={estado.className}>{estado.label}</Badge>
-                      </div>
+                      {i < turnos.length - 1 && <Separator className="opacity-30" />}
                     </div>
-                    {i < historial.length - 1 && <Separator className="opacity-30" />}
-                  </div>
-                );
-              })}
-            </div>
+                  );
+                })}
+              </div>
+            )}
           </CardContent>
         </Card>
       )}
@@ -318,32 +350,38 @@ export default function ClienteFichaPage() {
       {tab === "puntos" && (
         <Card className="border-border/50 bg-card">
           <CardHeader className="pb-3 px-5 pt-4">
-            <CardTitle className="text-sm font-semibold">Historial de puntos</CardTitle>
-          </CardHeader>
-          <CardContent className="px-5 pb-5 space-y-3">
-            {[
-              { fecha: "03/04/2026", puntos: 25, tipo: "acumula", motivo: "Visita: Corte + Barba", saldo: 340 },
-              { fecha: "18/03/2026", puntos: 25, tipo: "acumula", motivo: "Visita: Corte degradé", saldo: 315 },
-              { fecha: "15/03/2026", puntos: -100, tipo: "canje", motivo: "Canje: $500 descuento", saldo: 290 },
-              { fecha: "05/03/2026", puntos: 25, tipo: "acumula", motivo: "Visita: Corte + Barba", saldo: 390 },
-            ].map((p, i, arr) => (
-              <div key={i}>
-                <div className="flex items-center gap-4 py-2">
-                  <div className={`w-2 h-2 rounded-full ${p.tipo === "acumula" ? "bg-emerald-400" : "bg-red-400"}`} />
-                  <span className="text-xs text-muted-foreground w-20 shrink-0">{p.fecha}</span>
-                  <div className="flex-1 min-w-0">
-                    <p className="text-sm text-foreground">{p.motivo}</p>
-                  </div>
-                  <div className="text-right">
-                    <p className={`text-sm font-bold ${p.tipo === "acumula" ? "text-emerald-400" : "text-red-400"}`}>
-                      {p.tipo === "acumula" ? "+" : "-"}{p.puntos} pts
-                    </p>
-                    <p className="text-[10px] text-muted-foreground">Saldo: {p.saldo}</p>
-                  </div>
-                </div>
-                {i < arr.length - 1 && <Separator className="opacity-30" />}
+            <div className="flex items-center justify-between">
+              <CardTitle className="text-sm font-semibold">Historial de puntos</CardTitle>
+              <div className="flex items-center gap-1.5 text-xs text-amber-400">
+                <Star className="w-3.5 h-3.5" />
+                <span className="font-bold">{cliente.puntosAcumulados} pts</span>
               </div>
-            ))}
+            </div>
+          </CardHeader>
+          <CardContent className="px-5 pb-5">
+            {movimientos.length === 0 ? (
+              <p className="text-xs text-muted-foreground text-center py-6">Sin movimientos de puntos</p>
+            ) : (
+              <div className="space-y-1">
+                {movimientos.map((m, i) => (
+                  <div key={m.id}>
+                    <div className="flex items-center gap-4 py-2">
+                      <div className={`w-2 h-2 rounded-full shrink-0 ${m.tipo === "acumulacion" ? "bg-emerald-400" : "bg-red-400"}`} />
+                      <span className="text-xs text-muted-foreground w-20 shrink-0">{fmtFecha(m.createdAt)}</span>
+                      <div className="flex-1 min-w-0">
+                        <p className="text-sm text-foreground truncate">{m.descripcion}</p>
+                      </div>
+                      <div className="text-right shrink-0">
+                        <p className={`text-sm font-bold ${m.tipo === "acumulacion" ? "text-emerald-400" : "text-red-400"}`}>
+                          {m.tipo === "acumulacion" ? "+" : ""}{m.puntos} pts
+                        </p>
+                      </div>
+                    </div>
+                    {i < movimientos.length - 1 && <Separator className="opacity-30" />}
+                  </div>
+                ))}
+              </div>
+            )}
           </CardContent>
         </Card>
       )}
@@ -360,8 +398,8 @@ export default function ClienteFichaPage() {
       <NuevoTurnoModal
         open={modalNuevoTurnoOpen}
         onOpenChange={setModalNuevoTurnoOpen}
-        defaultClienteNombre={clienteData.nombre}
-        defaultClienteTelefono={clienteData.telefono}
+        defaultClienteNombre={cliente ? `${cliente.nombre} ${cliente.apellido ?? ""}`.trim() : ""}
+        defaultClienteTelefono={cliente?.telefono ?? ""}
       />
     </div>
   );

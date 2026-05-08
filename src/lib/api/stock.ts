@@ -1,4 +1,4 @@
-import { productos as _productos, proveedores as _proveedores, movimientosStock as _movimientos, NEGOCIO_ID, nextId } from '../mock/data';
+import { productos as _productos, proveedores as _proveedores, movimientosStock as _movimientos, insumosServicio as _insumosServicio, servicios, NEGOCIO_ID, nextId } from '../mock/data';
 
 export interface Producto {
   id: string;
@@ -104,12 +104,41 @@ export async function deleteProducto(id: string, _token: string): Promise<{ mess
   return { message: 'Producto eliminado' };
 }
 
+export interface InsumoServicio {
+  id: string;
+  servicioId: string;
+  productoId: string;
+  cantidadPorServicio: number;
+  unidad: string;
+  servicio?: { id: string; nombre: string; colorAgenda: string };
+  producto?: { id: string; nombre: string; unidad: string };
+}
+
 export async function getMovimientosStock(_token: string, filters?: { productoId?: string; tipo?: string }): Promise<unknown[]> {
   await delay(200);
   let result = [..._movimientos];
   if (filters?.productoId) result = result.filter(m => m.productoId === filters.productoId);
   if (filters?.tipo) result = result.filter(m => m.tipo === filters.tipo);
-  return result;
+  return result.map(m => {
+    const prod = _productos.find(p => p.id === m.productoId);
+    return { ...m, fecha: m.createdAt, producto: prod ? { nombre: prod.nombre, unidad: prod.unidad } : undefined };
+  });
+}
+
+export async function getInsumosServicio(_token: string, filters?: { servicioId?: string; productoId?: string }): Promise<InsumoServicio[]> {
+  await delay(150);
+  let result = [..._insumosServicio];
+  if (filters?.servicioId) result = result.filter(i => i.servicioId === filters.servicioId);
+  if (filters?.productoId) result = result.filter(i => i.productoId === filters.productoId);
+  return result.map(i => {
+    const srv = servicios.find(s => s.id === i.servicioId);
+    const prod = _productos.find(p => p.id === i.productoId);
+    return {
+      ...i,
+      servicio: srv ? { id: srv.id, nombre: srv.nombre, colorAgenda: srv.colorAgenda } : undefined,
+      producto: prod ? { id: prod.id, nombre: prod.nombre, unidad: prod.unidad } : undefined,
+    };
+  });
 }
 
 export async function createMovimientoStock(data: CreateMovimientoStock, _token: string): Promise<Producto> {

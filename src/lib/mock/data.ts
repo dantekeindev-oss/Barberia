@@ -245,20 +245,47 @@ export const proveedores = [
 
 export const productos = [
   { id: 'prod-001', negocioId: NEGOCIO_ID, nombre: 'Wella Color Touch Castaño', descripcion: 'Tinte semipermanente castaño 5/0', tipo: 'insumo' as const, costoCompra: 1800, stockActual: 5, stockMinimo: 3, unidad: 'unidad', activo: true, proveedorId: 'prov-001', _count: { movimientos: 8 } },
-  { id: 'prod-002', negocioId: NEGOCIO_ID, nombre: 'L\'Oréal Tinte Rubio', descripcion: 'Tinte permanente rubio 8/0', tipo: 'insumo' as const, costoCompra: 2100, stockActual: 2, stockMinimo: 3, unidad: 'unidad', activo: true, proveedorId: 'prov-001', _count: { movimientos: 6 } },
-  { id: 'prod-003', negocioId: NEGOCIO_ID, nombre: 'Gel Fijador Manen\'s', descripcion: 'Fijador extra fuerte 250ml', tipo: 'venta' as const, precioVenta: 800, costoCompra: 400, stockActual: 10, stockMinimo: 5, unidad: 'unidad', activo: true, proveedorId: 'prov-002', _count: { movimientos: 15 } },
+  { id: 'prod-002', negocioId: NEGOCIO_ID, nombre: "L'Oréal Tinte Rubio", descripcion: 'Tinte permanente rubio 8/0', tipo: 'insumo' as const, costoCompra: 2100, stockActual: 2, stockMinimo: 3, unidad: 'unidad', activo: true, proveedorId: 'prov-001', _count: { movimientos: 6 } },
+  { id: 'prod-003', negocioId: NEGOCIO_ID, nombre: "Gel Fijador Manen's", descripcion: 'Fijador extra fuerte 250ml', tipo: 'venta' as const, precioVenta: 800, costoCompra: 400, stockActual: 10, stockMinimo: 5, unidad: 'unidad', activo: true, proveedorId: 'prov-002', _count: { movimientos: 15 } },
   { id: 'prod-004', negocioId: NEGOCIO_ID, nombre: 'Cera Mate Got2b', descripcion: 'Cera mate modeladora 100ml', tipo: 'venta' as const, precioVenta: 1100, costoCompra: 600, stockActual: 15, stockMinimo: 5, unidad: 'unidad', activo: true, proveedorId: 'prov-002', _count: { movimientos: 22 } },
   { id: 'prod-005', negocioId: NEGOCIO_ID, nombre: 'Pomada Brillantina', descripcion: 'Pomada con brillo natural 80g', tipo: 'venta' as const, precioVenta: 900, costoCompra: 450, stockActual: 8, stockMinimo: 5, unidad: 'unidad', activo: true, proveedorId: 'prov-002', _count: { movimientos: 10 } },
   { id: 'prod-006', negocioId: NEGOCIO_ID, nombre: 'Shampoo Men Expert', descripcion: 'Shampoo anticaspa 400ml', tipo: 'venta' as const, precioVenta: 1500, costoCompra: 750, stockActual: 12, stockMinimo: 5, unidad: 'unidad', activo: true, proveedorId: 'prov-003', _count: { movimientos: 7 } },
   { id: 'prod-007', negocioId: NEGOCIO_ID, nombre: 'Hojas Gillette (pack 5)', descripcion: 'Hojas de afeitar premium', tipo: 'insumo' as const, costoCompra: 600, stockActual: 20, stockMinimo: 10, unidad: 'pack', activo: true, proveedorId: 'prov-002', _count: { movimientos: 12 } },
   { id: 'prod-008', negocioId: NEGOCIO_ID, nombre: 'Aftershave Nivea Men', descripcion: 'Aftershave sensitive 100ml', tipo: 'venta' as const, precioVenta: 1800, costoCompra: 900, stockActual: 3, stockMinimo: 5, unidad: 'unidad', activo: true, proveedorId: 'prov-002', _count: { movimientos: 9 } },
+  { id: 'prod-009', negocioId: NEGOCIO_ID, nombre: 'Oxidante en crema 20vol', descripcion: 'Oxidante para tintes 20 volúmenes', tipo: 'insumo' as const, costoCompra: 900, stockActual: 4, stockMinimo: 4, unidad: 'unidad', activo: true, proveedorId: 'prov-001', _count: { movimientos: 10 } },
+  { id: 'prod-010', negocioId: NEGOCIO_ID, nombre: 'Crema de afeitar Barbería', descripcion: 'Crema profesional para afeitado en barra', tipo: 'insumo' as const, costoCompra: 1200, stockActual: 7, stockMinimo: 3, unidad: 'unidad', activo: true, proveedorId: 'prov-002', _count: { movimientos: 5 } },
+  { id: 'prod-011', negocioId: NEGOCIO_ID, nombre: 'Talco para barbería', descripcion: 'Talco neutro para finalizar el corte', tipo: 'insumo' as const, costoCompra: 400, stockActual: 3, stockMinimo: 5, unidad: 'unidad', activo: true, proveedorId: 'prov-002', _count: { movimientos: 4 } },
+  { id: 'prod-012', negocioId: NEGOCIO_ID, nombre: 'Máscara hidratante capilar', descripcion: 'Tratamiento intensivo de hidratación', tipo: 'insumo' as const, costoCompra: 2800, stockActual: 6, stockMinimo: 3, unidad: 'unidad', activo: true, proveedorId: 'prov-001', _count: { movimientos: 6 } },
 ];
 
 export const movimientosStock = [
   { id: 'ms-001', productoId: 'prod-001', tipo: 'entrada' as const, cantidad: 5, stockAnterior: 0, stockNuevo: 5, motivo: 'Compra a proveedor', createdAt: dStr(-30) },
   { id: 'ms-002', productoId: 'prod-003', tipo: 'salida' as const, cantidad: 2, stockAnterior: 12, stockNuevo: 10, motivo: 'Venta', createdAt: dStr(-1) },
   { id: 'ms-003', productoId: 'prod-004', tipo: 'entrada' as const, cantidad: 10, stockAnterior: 5, stockNuevo: 15, motivo: 'Reposición', createdAt: dStr(-7) },
-  { id: 'ms-004', productoId: 'prod-002', tipo: 'salida' as const, cantidad: 1, stockAnterior: 3, stockNuevo: 2, motivo: 'Uso en servicio', createdAt: dStr(-2) },
+  { id: 'ms-004', productoId: 'prod-002', tipo: 'salida' as const, cantidad: 1, stockAnterior: 3, stockNuevo: 2, motivo: 'Uso en servicio de tintura', createdAt: dStr(-2) },
+  { id: 'ms-005', productoId: 'prod-007', tipo: 'salida' as const, cantidad: 3, stockAnterior: 23, stockNuevo: 20, motivo: 'Uso en servicio de afeitado', createdAt: dStr(-1) },
+  { id: 'ms-006', productoId: 'prod-009', tipo: 'entrada' as const, cantidad: 6, stockAnterior: 0, stockNuevo: 6, motivo: 'Compra a proveedor', createdAt: dStr(-14) },
+  { id: 'ms-007', productoId: 'prod-009', tipo: 'salida' as const, cantidad: 2, stockAnterior: 6, stockNuevo: 4, motivo: 'Uso en servicio de tintura', createdAt: dStr(-3) },
+  { id: 'ms-008', productoId: 'prod-012', tipo: 'entrada' as const, cantidad: 6, stockAnterior: 0, stockNuevo: 6, motivo: 'Compra a proveedor', createdAt: dStr(-20) },
+];
+
+// ── Insumos por Servicio ───────────────────────────────────────────────────────
+
+export const insumosServicio = [
+  { id: 'is-001', servicioId: 'srv-001', productoId: 'prod-007', cantidadPorServicio: 2, unidad: 'hoja' },   // Corte → Hojas
+  { id: 'is-002', servicioId: 'srv-001', productoId: 'prod-011', cantidadPorServicio: 1, unidad: 'aplicación' }, // Corte → Talco
+  { id: 'is-003', servicioId: 'srv-002', productoId: 'prod-007', cantidadPorServicio: 3, unidad: 'hoja' },   // Corte+barba → Hojas
+  { id: 'is-004', servicioId: 'srv-002', productoId: 'prod-010', cantidadPorServicio: 1, unidad: 'aplicación' }, // Corte+barba → Crema
+  { id: 'is-005', servicioId: 'srv-002', productoId: 'prod-011', cantidadPorServicio: 1, unidad: 'aplicación' }, // Corte+barba → Talco
+  { id: 'is-006', servicioId: 'srv-003', productoId: 'prod-007', cantidadPorServicio: 5, unidad: 'hoja' },   // Afeitado → Hojas
+  { id: 'is-007', servicioId: 'srv-003', productoId: 'prod-010', cantidadPorServicio: 2, unidad: 'aplicación' }, // Afeitado → Crema
+  { id: 'is-008', servicioId: 'srv-004', productoId: 'prod-001', cantidadPorServicio: 1, unidad: 'unidad' },  // Tintura → Wella
+  { id: 'is-009', servicioId: 'srv-004', productoId: 'prod-009', cantidadPorServicio: 1, unidad: 'unidad' },  // Tintura → Oxidante
+  { id: 'is-010', servicioId: 'srv-005', productoId: 'prod-002', cantidadPorServicio: 1, unidad: 'unidad' },  // Rayitos → L'Oréal
+  { id: 'is-011', servicioId: 'srv-005', productoId: 'prod-009', cantidadPorServicio: 1, unidad: 'unidad' },  // Rayitos → Oxidante
+  { id: 'is-012', servicioId: 'srv-006', productoId: 'prod-012', cantidadPorServicio: 1, unidad: 'unidad' },  // Tratamiento → Máscara
+  { id: 'is-013', servicioId: 'srv-007', productoId: 'prod-007', cantidadPorServicio: 1, unidad: 'hoja' },   // Corte niño → Hojas
+  { id: 'is-014', servicioId: 'srv-007', productoId: 'prod-011', cantidadPorServicio: 1, unidad: 'aplicación' }, // Corte niño → Talco
 ];
 
 // ── Fidelización ──────────────────────────────────────────────────────────────

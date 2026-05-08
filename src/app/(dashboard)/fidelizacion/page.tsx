@@ -26,6 +26,8 @@ import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useAuth } from "@/contexts/AuthContext";
 import { getClientes, getMembresias, getCupones } from "@/lib/api";
 import type { Cliente, Membresia, Cupon } from "@/lib/api";
+import { AsignarPuntosModal } from "@/components/modals/AsignarPuntosModal";
+import { CuponModal } from "@/components/modals/CuponModal";
 
 const nivelConfig: Record<string, { color: string; bg: string; puntos: number }> = {
   Regular: { color: "text-muted-foreground", bg: "bg-muted/30", puntos: 200 },
@@ -71,6 +73,18 @@ export default function FidelizacionPage() {
   const [cupones, setCupones] = useState<Cupon[]>([]);
 
   const [tab, setTab] = useState("puntos");
+  const [puntosModalOpen, setPuntosModalOpen] = useState(false);
+  const [clientePuntos, setClientePuntos] = useState<Cliente | null>(null);
+  const [cuponModalOpen, setCuponModalOpen] = useState(false);
+  const [cuponEditar, setCuponEditar] = useState<Cupon | null>(null);
+
+  function refetchData() {
+    if (!token) return;
+    Promise.all([getClientes(token), getCupones(token)]).then(([c, cu]) => {
+      setClientes(c);
+      setCupones(cu);
+    });
+  }
 
   useEffect(() => {
     if (!token || !user?.negocio?.id) return;
@@ -86,9 +100,8 @@ export default function FidelizacionPage() {
         setClientes(clientesData);
         setMembresias(membresiasData);
         setCupones(cuponesData);
-      } catch (err: any) {
-        setError(err.message || "Error al cargar datos de fidelización");
-        console.error("Error loading fidelizacion:", err);
+      } catch (err: unknown) {
+        setError(err instanceof Error ? err.message : "Error al cargar datos de fidelización");
       } finally {
         setLoading(false);
       }
@@ -139,7 +152,7 @@ export default function FidelizacionPage() {
             </div>
             <div>
               <p className="text-lg font-bold text-violet-400">
-                {clientes.filter((c) => (c as any).membresiaId).length}
+                {clientes.filter((c: Cliente & { membresiaId?: string }) => c.membresiaId).length}
               </p>
               <p className="text-[11px] text-muted-foreground">Clientes con membresía</p>
             </div>
@@ -194,9 +207,10 @@ export default function FidelizacionPage() {
               <Button
                 size="sm"
                 className="h-8 veylo-gradient text-white border-0 hover:opacity-90 text-xs font-semibold"
+                onClick={() => { setClientePuntos(null); setPuntosModalOpen(true); }}
               >
                 <Plus className="w-3.5 h-3.5 mr-1.5" />
-                Ajustar puntos
+                Asignar puntos
               </Button>
             </div>
             <Card className="border-border/50 bg-card overflow-hidden">
@@ -265,8 +279,11 @@ export default function FidelizacionPage() {
                                 {proximo.faltan > 0 ? `+${proximo.faltan} pts` : "Máximo"}
                               </td>
                               <td className="px-4 py-3">
-                                <button className="text-[10px] text-primary hover:text-primary/80 transition-colors px-2 py-1 rounded bg-primary/10 hover:bg-primary/20">
-                                  Canjear
+                                <button
+                                  onClick={() => { setClientePuntos(c); setPuntosModalOpen(true); }}
+                                  className="text-[10px] text-primary hover:text-primary/80 transition-colors px-2 py-1 rounded bg-primary/10 hover:bg-primary/20"
+                                >
+                                  + Puntos
                                 </button>
                               </td>
                             </tr>
@@ -300,9 +317,7 @@ export default function FidelizacionPage() {
                   </div>
                   <div className="flex-1">
                     <p className="text-[10px] text-muted-foreground">Puntos canjeados</p>
-                    <p className="text-base font-bold text-amber-400">
-                      {Math.round(totalPuntos * 0.3).toLocaleString()}
-                    </p>
+                    <p className="text-base font-bold text-amber-400">0</p>
                   </div>
                 </div>
                 <div className="flex items-center gap-3">
@@ -310,10 +325,8 @@ export default function FidelizacionPage() {
                     <Star className="w-3.5 h-3.5" />
                   </div>
                   <div className="flex-1">
-                    <p className="text-[10px] text-muted-foreground">Pendientes</p>
-                    <p className="text-base font-bold text-violet-400">
-                      {Math.round(totalPuntos * 0.7).toLocaleString()}
-                    </p>
+                    <p className="text-[10px] text-muted-foreground">Activos</p>
+                    <p className="text-base font-bold text-violet-400">{totalPuntos.toLocaleString()}</p>
                   </div>
                 </div>
               </CardContent>
@@ -388,7 +401,7 @@ export default function FidelizacionPage() {
                   <div className="flex items-center gap-2 text-xs text-muted-foreground">
                     <Users className="w-3.5 h-3.5" />
                     <span>
-                      {clientes.filter((c) => (c as any).membresiaId === m.id).length} clientes
+                      {clientes.filter((c) => (c as Cliente & { membresiaId?: string }).membresiaId === m.id).length} clientes
                       activos
                     </span>
                   </div>
@@ -396,6 +409,8 @@ export default function FidelizacionPage() {
                     size="sm"
                     className="w-full text-xs h-8 mt-3"
                     variant={i === 1 ? "default" : "outline"}
+                    disabled
+                    title="Próximamente"
                   >
                     Gestionar
                   </Button>
@@ -413,6 +428,7 @@ export default function FidelizacionPage() {
             <Button
               size="sm"
               className="h-8 veylo-gradient text-white border-0 hover:opacity-90 text-xs font-semibold"
+              onClick={() => { setCuponEditar(null); setCuponModalOpen(true); }}
             >
               <Plus className="w-3.5 h-3.5 mr-1.5" />
               Nuevo cupón
@@ -530,6 +546,19 @@ export default function FidelizacionPage() {
           </Card>
         </div>
       )}
+
+      <AsignarPuntosModal
+        open={puntosModalOpen}
+        onClose={() => setPuntosModalOpen(false)}
+        onSuccess={() => { setPuntosModalOpen(false); refetchData(); }}
+        cliente={clientePuntos ?? (clientes[0] ?? null)}
+      />
+      <CuponModal
+        open={cuponModalOpen}
+        onClose={() => setCuponModalOpen(false)}
+        onSuccess={() => { setCuponModalOpen(false); refetchData(); }}
+        cupon={cuponEditar}
+      />
     </div>
   );
 }

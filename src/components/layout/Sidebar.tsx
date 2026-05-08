@@ -20,6 +20,7 @@ import { cn } from "@/lib/utils";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { Separator } from "@/components/ui/separator";
 import { useBranding } from "@/contexts/BrandingContext";
+import { useAuth } from "@/contexts/AuthContext";
 
 const navItems = [
   {
@@ -54,6 +55,7 @@ interface SidebarProps {
 export function Sidebar({ collapsed = false }: SidebarProps) {
   const pathname = usePathname();
   const { branding } = useBranding();
+  const { logout } = useAuth();
 
   function isActive(href: string) {
     if (href === "/dashboard") return pathname === "/dashboard";
@@ -206,7 +208,7 @@ export function Sidebar({ collapsed = false }: SidebarProps) {
 
         {collapsed ? (
           <Tooltip>
-            <TooltipTrigger className="flex items-center justify-center w-10 h-10 mx-auto rounded-lg transition-all text-destructive/70 hover:bg-destructive/10 hover:text-destructive">
+            <TooltipTrigger onClick={logout} className="flex items-center justify-center w-10 h-10 mx-auto rounded-lg transition-all text-destructive/70 hover:bg-destructive/10 hover:text-destructive">
               <LogOut className="w-5 h-5 shrink-0" />
             </TooltipTrigger>
             <TooltipContent side="right" className="text-xs">
@@ -214,7 +216,7 @@ export function Sidebar({ collapsed = false }: SidebarProps) {
             </TooltipContent>
           </Tooltip>
         ) : (
-          <button className="w-full flex items-center gap-3 px-3 py-2.5 rounded-lg transition-all text-destructive/70 hover:bg-destructive/10 hover:text-destructive">
+          <button onClick={logout} className="w-full flex items-center gap-3 px-3 py-2.5 rounded-lg transition-all text-destructive/70 hover:bg-destructive/10 hover:text-destructive">
             <LogOut className="w-4 h-4 shrink-0" />
             <span className="text-sm font-medium">Cerrar sesión</span>
           </button>
